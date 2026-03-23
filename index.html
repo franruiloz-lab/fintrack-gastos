@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#080810">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FinTrack">
+  <title>FinTrack - Gestor de Gastos</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app">
+
+    <header class="app-header">
+      <div class="logo">Fin<span>Track</span></div>
+      <div class="month-nav">
+        <button id="prevMonthBtn" class="nav-btn">&#8249;</button>
+        <span id="monthDisplay">Marzo 2026</span>
+        <button id="nextMonthBtn" class="nav-btn">&#8250;</button>
+      </div>
+    </header>
+
+    <main class="app-main">
+
+      <!-- DASHBOARD -->
+      <section id="view-dashboard" class="view active">
+        <div class="cards-grid">
+          <div class="stat-card glass">
+            <div class="stat-icon income-icon">&#8593;</div>
+            <div class="stat-info">
+              <span class="stat-label">Ingresos</span>
+              <span class="stat-value income" id="dash-income">0 &#8364;</span>
+            </div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon expense-icon">&#8595;</div>
+            <div class="stat-info">
+              <span class="stat-label">Gastos</span>
+              <span class="stat-value expense" id="dash-expense">0 &#8364;</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="savings-card glass">
+          <div class="savings-header">
+            <span class="savings-label">Ahorro mensual</span>
+            <span class="savings-value" id="dash-savings">0 &#8364;</span>
+          </div>
+          <div class="savings-bar">
+            <div class="savings-fill" id="dash-savings-fill"></div>
+          </div>
+          <div class="savings-footer">
+            <span id="dash-savings-pct">Sin objetivo definido</span>
+            <span id="dash-savings-goal"></span>
+          </div>
+        </div>
+
+        <div class="glass chart-card">
+          <h3 class="section-title">Gastos por categoria</h3>
+          <div class="donut-wrapper">
+            <canvas id="categoryChart"></canvas>
+            <div class="donut-center">
+              <span id="donutTotal">0 &#8364;</span>
+              <small>este mes</small>
+            </div>
+          </div>
+          <div id="categoryLegend" class="chart-legend"></div>
+        </div>
+
+        <div class="glass trend-card">
+          <h3 class="section-title">Ultimos 6 meses</h3>
+          <div class="trend-chart-wrapper">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- GASTOS -->
+      <section id="view-gastos" class="view">
+        <div id="emptyTransactions" class="empty-state hidden">
+          <div class="empty-icon">&#128184;</div>
+          <p>Sin transacciones este mes</p>
+          <small>Pulsa + para anadir</small>
+        </div>
+        <div id="transactionsList"></div>
+      </section>
+
+      <!-- OBJETIVOS -->
+      <section id="view-objetivos" class="view">
+        <div class="glass settings-card">
+          <h3>&#128176; Ingresos mensuales de referencia</h3>
+          <p class="settings-hint">Si no registras ingresos manualmente, este valor se usa para calcular el ahorro.</p>
+          <div class="input-group">
+            <input type="number" id="refIncomeInput" class="settings-input" placeholder="2000" min="0">
+            <span class="input-suffix">&#8364;/mes</span>
+          </div>
+          <button class="save-settings-btn" id="saveRefIncome">Guardar</button>
+        </div>
+
+        <div class="glass settings-card">
+          <h3>&#127919; Objetivo de ahorro mensual</h3>
+          <div class="goal-type-toggle">
+            <button class="goal-tab active" data-gtype="amount">&#8364; importe fijo</button>
+            <button class="goal-tab" data-gtype="percent">% de ingresos</button>
+          </div>
+          <div class="input-group">
+            <input type="number" id="savingsGoalInput" class="settings-input" placeholder="500" min="0">
+            <span class="input-suffix" id="goalSuffix">&#8364;</span>
+          </div>
+          <button class="save-settings-btn" id="saveGoal">Guardar</button>
+        </div>
+
+        <div class="glass settings-card">
+          <h3>&#128202; Presupuesto por categoria</h3>
+          <p class="settings-hint">Limite maximo mensual por categoria.</p>
+          <div id="budgetInputs" class="budget-inputs"></div>
+          <button class="save-settings-btn" id="saveBudgets">Guardar presupuestos</button>
+        </div>
+
+        <div class="glass settings-card">
+          <h3>&#128200; Progreso del mes</h3>
+          <div id="budgetProgress"></div>
+        </div>
+      </section>
+
+      <!-- CONSEJOS -->
+      <section id="view-consejos" class="view">
+        <div id="adviceList" class="advice-list"></div>
+      </section>
+
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-view="dashboard">
+        <span class="nav-icon">&#128202;</span>
+        <span>Inicio</span>
+      </button>
+      <button class="nav-item" data-view="gastos">
+        <span class="nav-icon">&#128203;</span>
+        <span>Gastos</span>
+      </button>
+      <button class="add-fab" id="addFab">+</button>
+      <button class="nav-item" data-view="objetivos">
+        <span class="nav-icon">&#127919;</span>
+        <span>Objetivos</span>
+      </button>
+      <button class="nav-item" data-view="consejos">
+        <span class="nav-icon">&#128161;</span>
+        <span>Consejos</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- MODAL AÑADIR -->
+  <div id="addModal" class="modal-backdrop hidden">
+    <div class="modal glass">
+      <div class="modal-header">
+        <h2>Nueva transaccion</h2>
+        <button class="close-btn" id="closeModal">&#10005;</button>
+      </div>
+      <div class="type-toggle">
+        <button class="type-btn active" data-type="expense">&#128184; Gasto</button>
+        <button class="type-btn" data-type="income">&#128176; Ingreso</button>
+      </div>
+      <div class="amount-group">
+        <input type="number" id="amountInput" class="amount-input" placeholder="0" min="0" step="0.01" inputmode="decimal">
+        <span class="amount-euro">&#8364;</span>
+      </div>
+      <div class="cat-grid" id="catGrid"></div>
+      <input type="text" id="descInput" class="desc-input" placeholder="Descripcion (opcional)" maxlength="60">
+      <input type="date" id="dateInput" class="date-input">
+      <button class="primary-btn" id="saveBtn">Guardar</button>
+    </div>
+  </div>
+
+  <!-- MODAL CONFIRMAR ELIMINAR -->
+  <div id="deleteModal" class="modal-backdrop hidden">
+    <div class="modal glass small-modal">
+      <p>&#128465; Eliminar esta transaccion?</p>
+      <div class="modal-btns">
+        <button class="cancel-btn" id="cancelDelete">Cancelar</button>
+        <button class="danger-btn" id="confirmDelete">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
