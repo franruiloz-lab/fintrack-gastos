@@ -177,11 +177,9 @@ function renderDashboard() {
   const refIncome    = totalIncome || settings.refIncome || 0;
   const savings      = refIncome - totalExpense;
 
-  // Stat cards — daily totals
-  const todayExpense = sum(getExpenses().filter(t => t.date === today));
-  const todayIncome  = sum(getIncomes().filter(t => t.date === today));
-  document.getElementById('dash-income').textContent  = fmtEuro(todayIncome);
-  document.getElementById('dash-expense').textContent = fmtEuro(todayExpense);
+  // Stat cards — monthly totals
+  document.getElementById('dash-income').textContent  = fmtEuro(totalIncome);
+  document.getElementById('dash-expense').textContent = fmtEuro(totalExpense);
 
   // Savings
   const savEl = document.getElementById('dash-savings');
@@ -284,17 +282,28 @@ function renderCategoryChart() {
 }
 
 // =====================================================================
-// RENDER: TREND CHART
+// RENDER: DAILY CHART (current month)
 // =====================================================================
 function renderTrendChart() {
-  const months   = last6Months();
-  const settings = DB.getSettings();
-  const labels   = months.map(m => fmtMonth(m).substring(0, 3));
-  const expData  = months.map(m => sum(getExpenses(m)));
-  const incData  = months.map(m => {
-    const txInc = sum(getIncomes(m));
-    return txInc || (m === state.currentMonth ? settings.refIncome || 0 : 0);
-  });
+  const [y, m]   = state.currentMonth.split('-').map(Number);
+  const today    = new Date();
+  const isCurrentMonth = (y === today.getFullYear() && m === today.getMonth() + 1);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const lastDay  = isCurrentMonth ? today.getDate() : daysInMonth;
+
+  const labels   = [];
+  const expData  = [];
+  const incData  = [];
+
+  const allTxs = DB.getTransactions().filter(tx => tx.date.startsWith(state.currentMonth));
+
+  for (let d = 1; d <= lastDay; d++) {
+    const dateStr = `${state.currentMonth}-${String(d).padStart(2, '0')}`;
+    const dayTxs  = allTxs.filter(tx => tx.date === dateStr);
+    labels.push(d);
+    expData.push(sum(dayTxs.filter(t => t.type === 'expense')));
+    incData.push(sum(dayTxs.filter(t => t.type === 'income')));
+  }
 
   if (charts.trend) { charts.trend.destroy(); charts.trend = null; }
 
@@ -307,15 +316,15 @@ function renderTrendChart() {
         {
           label: 'Gastos',
           data: expData,
-          backgroundColor: 'rgba(255,61,113,0.55)',
-          borderRadius: 5,
+          backgroundColor: 'rgba(255,61,113,0.6)',
+          borderRadius: 4,
           borderSkipped: false,
         },
         {
           label: 'Ingresos',
           data: incData,
-          backgroundColor: 'rgba(0,200,83,0.35)',
-          borderRadius: 5,
+          backgroundColor: 'rgba(0,200,83,0.45)',
+          borderRadius: 4,
           borderSkipped: false,
         },
       ],
@@ -333,12 +342,21 @@ function renderTrendChart() {
             padding: 14,
           },
         },
-        tooltip: { callbacks: { label: ctx => ` ${fmtEuro(ctx.parsed.y)}` } },
+        tooltip: {
+          callbacks: {
+            title: items => `Día ${items[0].label}`,
+            label: ctx => ` ${fmtEuro(ctx.parsed.y)}`,
+          },
+        },
       },
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: '#7878a0', font: { family: 'Outfit', size: 11 } },
+          ticks: {
+            color: '#7878a0',
+            font: { family: 'Outfit', size: 10 },
+            maxTicksLimit: 10,
+          },
         },
         y: {
           grid: { color: 'rgba(255,255,255,0.04)' },
