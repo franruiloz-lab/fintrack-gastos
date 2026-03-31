@@ -309,29 +309,37 @@ function renderTrendChart() {
 
   const ctx = document.getElementById('trendChart').getContext('2d');
   charts.trend = new Chart(ctx, {
-    type: 'bar',
     data: {
       labels,
       datasets: [
         {
+          type: 'bar',
           label: 'Gastos',
           data: expData,
-          backgroundColor: 'rgba(255,61,113,0.6)',
+          backgroundColor: 'rgba(255,61,113,0.65)',
           borderRadius: 4,
-          borderSkipped: false,
+          maxBarThickness: 18,
+          order: 2,
         },
         {
+          type: 'line',
           label: 'Ingresos',
           data: incData,
-          backgroundColor: 'rgba(0,200,83,0.45)',
-          borderRadius: 4,
-          borderSkipped: false,
+          borderColor: 'rgba(0,200,83,0.85)',
+          backgroundColor: 'rgba(0,200,83,0.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: 'rgba(0,200,83,0.9)',
+          tension: 0.3,
+          fill: true,
+          order: 1,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: {
           position: 'bottom',
@@ -345,7 +353,7 @@ function renderTrendChart() {
         tooltip: {
           callbacks: {
             title: items => `Día ${items[0].label}`,
-            label: ctx => ` ${fmtEuro(ctx.parsed.y)}`,
+            label: ctx => ` ${ctx.dataset.label}: ${fmtEuro(ctx.parsed.y)}`,
           },
         },
       },
@@ -355,10 +363,11 @@ function renderTrendChart() {
           ticks: {
             color: '#7878a0',
             font: { family: 'Outfit', size: 10 },
-            maxTicksLimit: 10,
+            maxTicksLimit: 12,
           },
         },
         y: {
+          min: 0,
           grid: { color: 'rgba(255,255,255,0.04)' },
           ticks: {
             color: '#7878a0',
