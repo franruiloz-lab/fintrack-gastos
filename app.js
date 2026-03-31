@@ -170,15 +170,18 @@ function expenseByCategory(ym) {
 // RENDER: DASHBOARD
 // =====================================================================
 function renderDashboard() {
-  const settings = DB.getSettings();
+  const settings     = DB.getSettings();
+  const today        = new Date().toISOString().split('T')[0];
   const totalExpense = sum(getExpenses());
   const totalIncome  = sum(getIncomes());
   const refIncome    = totalIncome || settings.refIncome || 0;
   const savings      = refIncome - totalExpense;
 
-  // Stat cards
-  document.getElementById('dash-income').textContent  = fmtEuro(totalIncome);
-  document.getElementById('dash-expense').textContent = fmtEuro(totalExpense);
+  // Stat cards — daily totals
+  const todayExpense = sum(getExpenses().filter(t => t.date === today));
+  const todayIncome  = sum(getIncomes().filter(t => t.date === today));
+  document.getElementById('dash-income').textContent  = fmtEuro(todayIncome);
+  document.getElementById('dash-expense').textContent = fmtEuro(todayExpense);
 
   // Savings
   const savEl = document.getElementById('dash-savings');
@@ -409,7 +412,6 @@ function renderTransactions() {
 function renderObjetivos() {
   const settings = DB.getSettings();
 
-  document.getElementById('refIncomeInput').value   = settings.refIncome || '';
   document.getElementById('savingsGoalInput').value = settings.goalValue || '';
   document.getElementById('goalSuffix').textContent = settings.goalType === 'percent' ? '%' : '€';
 
@@ -612,7 +614,7 @@ function generateAdvice() {
       advice.push({
         type: 'sugerencia', icon: '💡',
         title: `${cat.label} representa el ${pct}% de tus gastos`,
-        body: `Esta categoria domina tu presupuesto (${fmtEuro(v)}). Reducir un 20% en ${cat.emoji} ${cat.label} te ahorrarĂ­a ${fmtEuro(saving20)} adicionales al mes.`,
+        body: `Esta categoria domina tu presupuesto (${fmtEuro(v)}). Reducir un 20% en ${cat.emoji} ${cat.label} te ahorraría ${fmtEuro(saving20)} adicionales al mes.`,
       });
     }
   }
@@ -622,7 +624,7 @@ function generateAdvice() {
     advice.push({
       type: 'sugerencia', icon: '🏦',
       title: 'Considera automatizar tu ahorro',
-      body: `Con tu margen actual, podrĂ­as transferir automaticamente ${fmtEuro(goalEuros || savings * 0.5)} al principio de cada mes a una cuenta de ahorro. Lo que no ves, no lo gastas.`,
+      body: `Con tu margen actual, podrías transferir automaticamente ${fmtEuro(goalEuros || savings * 0.5)} al principio de cada mes a una cuenta de ahorro. Lo que no ves, no lo gastas.`,
     });
   }
 
@@ -951,15 +953,6 @@ function init() {
       showToast('Transaccion eliminada');
       refreshView();
     }
-  });
-
-  // Settings: ref income
-  document.getElementById('saveRefIncome').addEventListener('click', () => {
-    const s = DB.getSettings();
-    s.refIncome = parseFloat(document.getElementById('refIncomeInput').value) || 0;
-    DB.saveSettings(s);
-    showToast('Ingresos de referencia guardados');
-    if (state.activeView === 'dashboard') renderDashboard();
   });
 
   // Settings: savings goal
