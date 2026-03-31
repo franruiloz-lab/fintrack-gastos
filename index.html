@@ -127,6 +127,14 @@
           <h3>&#128200; Progreso del mes</h3>
           <div id="budgetProgress"></div>
         </div>
+
+        <div class="glass settings-card">
+          <h3>&#127991;&#65039; Mis categorías</h3>
+          <p class="settings-hint">Crea categorías personalizadas con tu propio nombre, icono y color.</p>
+          <div id="customCatList" class="custom-cat-list"></div>
+          <button class="save-settings-btn" id="newCatBtn">+ Nueva categoría</button>
+        </div>
+
       </section>
 
       <!-- CONSEJOS -->
@@ -188,6 +196,25 @@
         <button class="cancel-btn" id="cancelDelete">Cancelar</button>
         <button class="danger-btn" id="confirmDelete">Eliminar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL NUEVA CATEGORÍA -->
+  <div id="catModal" class="modal-backdrop hidden">
+    <div class="modal glass">
+      <div class="modal-header">
+        <h2>Nueva categoría</h2>
+        <button class="close-btn" id="closeCatModal">&#10005;</button>
+      </div>
+      <div class="cat-create-preview">
+        <div class="cat-create-icon" id="catPreviewIcon">&#128246;</div>
+        <input type="text" id="catNameInput" class="desc-input cat-name-field" placeholder="Nombre de la categoría" maxlength="20">
+      </div>
+      <div class="cat-section-label">Icono</div>
+      <div class="emoji-picker" id="emojiPicker"></div>
+      <div class="cat-section-label">Color</div>
+      <div class="color-palette" id="colorPalette"></div>
+      <button class="primary-btn" id="saveCatBtn">Crear categoría</button>
     </div>
   </div>
 

@@ -41,7 +41,38 @@ const DB = {
   saveSettings(s) {
     localStorage.setItem('ft_settings', JSON.stringify(s));
   },
+  getCustomCategories() {
+    return JSON.parse(localStorage.getItem('ft_custom_cats') || '[]');
+  },
+  saveCustomCategories(cats) {
+    localStorage.setItem('ft_custom_cats', JSON.stringify(cats));
+  },
 };
+
+// =====================================================================
+// DYNAMIC CATEGORIES (base + custom)
+// =====================================================================
+function getAllCategories() {
+  const result = { ...CATEGORIES };
+  DB.getCustomCategories().forEach(cat => {
+    result[cat.id] = { label: cat.label, emoji: cat.emoji, color: cat.color, custom: true };
+  });
+  return result;
+}
+
+const CAT_EMOJIS = [
+  '🏠','🛒','🍽','🚗','🎮','💊','👕','📱','📚','📦',
+  '💰','🏋️','✈️','🎬','🎵','🐕','🏥','💅','🎓','🛍️',
+  '🍺','☕','🎁','🏖','💄','🔧','🚌','⛽','🍕','🎪',
+  '💍','🏊','🎯','📸','🌱','🏡','👶','🎭','🎲','💻',
+  '🚀','🎸','🍷','🛁','🐱','🌍','💌','🎀',
+];
+
+const CAT_COLORS = [
+  '#7c4dff','#00e5ff','#ffd740','#ff9800',
+  '#e91e63','#00c853','#aa00ff','#ff5722',
+  '#2196f3','#607d8b','#ff3d71','#00bfa5',
+];
 
 // =====================================================================
 // STATE
@@ -52,6 +83,8 @@ const state = {
   txType: 'expense',
   selectedCat: null,
   deleteId: null,
+  catEmoji: '📦',
+  catColor: '#7c4dff',
 };
 
 const charts = { category: null, trend: null };
@@ -186,6 +219,7 @@ function calcGoalEuros(settings, refIncome) {
 // RENDER: DONUT CHART
 // =====================================================================
 function renderCategoryChart() {
+  const allCats  = getAllCategories();
   const catExp   = expenseByCategory();
   const total    = Object.values(catExp).reduce((s, v) => s + v, 0);
   const entries  = Object.entries(catExp).sort((a, b) => b[1] - a[1]);
@@ -210,10 +244,10 @@ function renderCategoryChart() {
   charts.category = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: entries.map(([k]) => CATEGORIES[k] ? CATEGORIES[k].label : k),
+      labels: entries.map(([k]) => allCats[k] ? allCats[k].label : k),
       datasets: [{
         data: entries.map(([, v]) => v),
-        backgroundColor: entries.map(([k]) => CATEGORIES[k] ? CATEGORIES[k].color : '#607d8b'),
+        backgroundColor: entries.map(([k]) => allCats[k] ? allCats[k].color : '#607d8b'),
         borderWidth: 2,
         borderColor: '#080810',
         hoverBorderWidth: 3,
@@ -234,7 +268,7 @@ function renderCategoryChart() {
 
   // Legend (top 5)
   document.getElementById('categoryLegend').innerHTML = entries.slice(0, 5).map(([k, v]) => {
-    const cat = CATEGORIES[k] || CATEGORIES.otros;
+    const cat = allCats[k] || CATEGORIES.otros;
     return `
       <div class="legend-item">
         <div class="legend-dot" style="background:${cat.color}"></div>
@@ -338,11 +372,12 @@ function renderTransactions() {
     groups[tx.date].push(tx);
   });
 
+  const allCats = getAllCategories();
   listEl.innerHTML = Object.entries(groups).map(([date, items]) => `
     <div class="tx-day-group">
       <div class="tx-day-header">${fmtDate(date)}</div>
       ${items.map(tx => {
-        const cat  = CATEGORIES[tx.category] || CATEGORIES.otros;
+        const cat  = allCats[tx.category] || CATEGORIES.otros;
         const sign = tx.type === 'expense' ? '-' : '+';
         return `
           <div class="tx-item" data-id="${tx.id}">
@@ -382,7 +417,7 @@ function renderObjetivos() {
   });
 
   // Budget inputs
-  document.getElementById('budgetInputs').innerHTML = Object.entries(CATEGORIES).map(([k, cat]) => `
+  document.getElementById('budgetInputs').innerHTML = Object.entries(getAllCategories()).map(([k, cat]) => `
     <div class="budget-input-row">
       <div class="budget-cat-label">${cat.emoji} ${cat.label}</div>
       <input type="number" class="budget-input-field" data-cat="${k}"
@@ -393,6 +428,7 @@ function renderObjetivos() {
   ).join('');
 
   renderBudgetProgress(settings);
+  renderCustomCats();
 }
 
 function renderBudgetProgress(settings) {
@@ -400,7 +436,7 @@ function renderBudgetProgress(settings) {
   const catExp  = expenseByCategory();
   const el      = document.getElementById('budgetProgress');
 
-  const entries = Object.entries(CATEGORIES).filter(([k]) => budgets[k] > 0 || catExp[k] > 0);
+  const entries = Object.entries(getAllCategories()).filter(([k]) => budgets[k] > 0 || catExp[k] > 0);
 
   if (entries.length === 0) {
     el.innerHTML = '<p style="color:var(--muted);font-size:0.78rem">Configura presupuestos arriba para ver el progreso aqui.</p>';
@@ -454,6 +490,7 @@ function renderConsejos() {
 // =====================================================================
 function generateAdvice() {
   const advice   = [];
+  const allCats  = getAllCategories();
   const settings = DB.getSettings();
 
   const expenses     = getExpenses();
@@ -515,7 +552,7 @@ function generateAdvice() {
 
   if (overBudget.length > 0) {
     const [k, spent] = overBudget[0];
-    const cat        = CATEGORIES[k] || CATEGORIES.otros;
+    const cat        = allCats[k] || CATEGORIES.otros;
     const over       = spent - budgets[k];
     advice.push({
       type: 'alerta', icon: '📊',
@@ -531,7 +568,7 @@ function generateAdvice() {
 
   if (nearLimit.length > 0) {
     const [k, spent] = nearLimit[0];
-    const cat        = CATEGORIES[k] || CATEGORIES.otros;
+    const cat        = allCats[k] || CATEGORIES.otros;
     const remaining  = budgets[k] - spent;
     const pct        = Math.round(spent / budgets[k] * 100);
     advice.push({
@@ -567,7 +604,7 @@ function generateAdvice() {
   const topCat = Object.entries(catExp).sort((a, b) => b[1] - a[1])[0];
   if (topCat && totalExpense > 0) {
     const [k, v] = topCat;
-    const cat    = CATEGORIES[k] || CATEGORIES.otros;
+    const cat    = allCats[k] || CATEGORIES.otros;
     const pct    = Math.round(v / totalExpense * 100);
     if (pct > 40 && k !== 'vivienda') {
       const saving20 = v * 0.2;
@@ -617,6 +654,111 @@ function generateAdvice() {
 }
 
 // =====================================================================
+// CUSTOM CATEGORIES MANAGEMENT
+// =====================================================================
+function renderCustomCats() {
+  const cats = DB.getCustomCategories();
+  const el   = document.getElementById('customCatList');
+  if (!el) return;
+
+  if (cats.length === 0) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:0.75rem;padding:0.3rem 0">Sin categorías personalizadas todavía.</p>';
+    return;
+  }
+
+  el.innerHTML = cats.map(cat => `
+    <div class="custom-cat-item">
+      <div class="custom-cat-icon" style="background:${cat.color}1a">${cat.emoji}</div>
+      <span class="custom-cat-name" style="color:${cat.color}">${cat.label}</span>
+      <button class="custom-cat-delete" data-id="${cat.id}">✕</button>
+    </div>`
+  ).join('');
+
+  el.querySelectorAll('.custom-cat-delete').forEach(btn => {
+    btn.addEventListener('click', () => deleteCat(btn.dataset.id));
+  });
+}
+
+function openCatModal() {
+  state.catEmoji = '📦';
+  state.catColor = '#7c4dff';
+  document.getElementById('catNameInput').value    = '';
+  document.getElementById('catPreviewIcon').textContent       = '📦';
+  document.getElementById('catPreviewIcon').style.background  = '#7c4dff1a';
+
+  // Emoji picker
+  document.getElementById('emojiPicker').innerHTML = CAT_EMOJIS.map(e => `
+    <button class="emoji-btn${e === state.catEmoji ? ' selected' : ''}" data-emoji="${e}">${e}</button>`
+  ).join('');
+  document.getElementById('emojiPicker').querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.catEmoji = btn.dataset.emoji;
+      document.getElementById('emojiPicker').querySelectorAll('.emoji-btn')
+        .forEach(b => b.classList.toggle('selected', b.dataset.emoji === state.catEmoji));
+      document.getElementById('catPreviewIcon').textContent = state.catEmoji;
+    });
+  });
+
+  // Color palette
+  document.getElementById('colorPalette').innerHTML =
+    CAT_COLORS.map(c => `
+      <button class="color-swatch${c === state.catColor ? ' selected' : ''}"
+              data-color="${c}" style="background:${c}"></button>`
+    ).join('') +
+    `<input type="color" id="customColorPicker" class="color-custom-input" value="${state.catColor}">`;
+
+  document.getElementById('colorPalette').querySelectorAll('.color-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.catColor = btn.dataset.color;
+      document.getElementById('colorPalette').querySelectorAll('.color-swatch')
+        .forEach(b => b.classList.toggle('selected', b.dataset.color === state.catColor));
+      document.getElementById('catPreviewIcon').style.background = state.catColor + '1a';
+    });
+  });
+
+  document.getElementById('colorPalette').addEventListener('change', e => {
+    if (e.target.id === 'customColorPicker') {
+      state.catColor = e.target.value;
+      document.getElementById('colorPalette').querySelectorAll('.color-swatch')
+        .forEach(b => b.classList.remove('selected'));
+      document.getElementById('catPreviewIcon').style.background = state.catColor + '1a';
+    }
+  });
+
+  document.getElementById('catModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('catNameInput').focus(), 320);
+}
+
+function saveCat() {
+  const name = document.getElementById('catNameInput').value.trim();
+  if (!name) {
+    const input = document.getElementById('catNameInput');
+    input.style.animation = 'shake 0.3s ease';
+    setTimeout(() => input.style.animation = '', 400);
+    input.focus();
+    return;
+  }
+
+  const cats = DB.getCustomCategories();
+  cats.push({
+    id:    'c_' + Date.now().toString(36),
+    label: name,
+    emoji: state.catEmoji,
+    color: state.catColor,
+  });
+  DB.saveCustomCategories(cats);
+  document.getElementById('catModal').classList.add('hidden');
+  renderCustomCats();
+  showToast('Categoría creada');
+}
+
+function deleteCat(id) {
+  DB.saveCustomCategories(DB.getCustomCategories().filter(c => c.id !== id));
+  renderCustomCats();
+  showToast('Categoría eliminada');
+}
+
+// =====================================================================
 // MODAL: ADD TRANSACTION
 // =====================================================================
 function openAddModal() {
@@ -639,7 +781,7 @@ function openAddModal() {
 
 function buildCatGrid() {
   const grid = document.getElementById('catGrid');
-  grid.innerHTML = Object.entries(CATEGORIES).map(([k, cat]) => `
+  grid.innerHTML = Object.entries(getAllCategories()).map(([k, cat]) => `
     <button class="cat-btn${state.selectedCat === k ? ' selected' : ''}" data-cat="${k}">
       <span class="cat-emoji">${cat.emoji}</span>
       <span class="cat-label">${cat.label}</span>
@@ -838,6 +980,16 @@ function init() {
     renderBudgetProgress(s);
     showToast('Presupuestos guardados');
   });
+
+  // Custom categories modal
+  document.getElementById('newCatBtn').addEventListener('click', openCatModal);
+  document.getElementById('closeCatModal').addEventListener('click', () => {
+    document.getElementById('catModal').classList.add('hidden');
+  });
+  document.getElementById('catModal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) document.getElementById('catModal').classList.add('hidden');
+  });
+  document.getElementById('saveCatBtn').addEventListener('click', saveCat);
 
   // Initial render
   document.getElementById('monthDisplay').textContent = fmtMonth(state.currentMonth);
