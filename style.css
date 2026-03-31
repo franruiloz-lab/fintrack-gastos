@@ -729,6 +729,15 @@ body {
   background: rgba(124, 77, 255, 0.15);
 }
 
+.cat-btn-new .cat-emoji {
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: var(--muted);
+}
+
+.cat-btn-new:hover { border-color: var(--purple); }
+.cat-btn-new:hover .cat-emoji { color: var(--purple); }
+
 .desc-input, .date-input {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);

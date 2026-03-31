@@ -85,6 +85,7 @@ const state = {
   deleteId: null,
   catEmoji: '📦',
   catColor: '#7c4dff',
+  catModalSource: null,
 };
 
 const charts = { category: null, trend: null };
@@ -750,6 +751,12 @@ function saveCat() {
   document.getElementById('catModal').classList.add('hidden');
   renderCustomCats();
   showToast('Categoría creada');
+
+  if (state.catModalSource === 'addTx') {
+    state.catModalSource = null;
+    state.selectedCat = cats[cats.length - 1].id;
+    buildCatGrid();
+  }
 }
 
 function deleteCat(id) {
@@ -786,14 +793,23 @@ function buildCatGrid() {
       <span class="cat-emoji">${cat.emoji}</span>
       <span class="cat-label">${cat.label}</span>
     </button>`
-  ).join('');
+  ).join('') + `
+    <button class="cat-btn cat-btn-new" id="catGridNewBtn">
+      <span class="cat-emoji">+</span>
+      <span class="cat-label">Nueva</span>
+    </button>`;
 
-  grid.querySelectorAll('.cat-btn').forEach(btn => {
+  grid.querySelectorAll('.cat-btn:not(.cat-btn-new)').forEach(btn => {
     btn.addEventListener('click', () => {
       state.selectedCat = btn.dataset.cat;
       grid.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
     });
+  });
+
+  document.getElementById('catGridNewBtn').addEventListener('click', () => {
+    state.catModalSource = 'addTx';
+    openCatModal();
   });
 }
 
