@@ -35,7 +35,7 @@ const DB = {
     this.saveTransactions(this.getTransactions().filter(t => t.id !== id));
   },
   getSettings() {
-    const defaults = { refIncome: 0, goalType: 'amount', goalValue: 0, budgets: {} };
+    const defaults = { refIncome: 0, goalType: 'amount', goalValue: 0, budgets: {}, baseBalance: 0 };
     return Object.assign(defaults, JSON.parse(localStorage.getItem('ft_settings') || '{}'));
   },
   saveSettings(s) {
@@ -171,7 +171,6 @@ function expenseByCategory(ym) {
 // =====================================================================
 function renderDashboard() {
   const settings     = DB.getSettings();
-  const today        = new Date().toISOString().split('T')[0];
   const totalExpense = sum(getExpenses());
   const totalIncome  = sum(getIncomes());
   const refIncome    = totalIncome || settings.refIncome || 0;
@@ -180,6 +179,15 @@ function renderDashboard() {
   // Stat cards — monthly totals
   document.getElementById('dash-income').textContent  = fmtEuro(totalIncome);
   document.getElementById('dash-expense').textContent = fmtEuro(totalExpense);
+
+  // Disponible — saldo histórico acumulado
+  const allTxs      = DB.getTransactions();
+  const disponible  = (settings.baseBalance || 0)
+                    + sum(allTxs.filter(t => t.type === 'income'))
+                    - sum(allTxs.filter(t => t.type === 'expense'));
+  const balEl = document.getElementById('dash-balance');
+  balEl.textContent = fmtEuro(disponible);
+  balEl.style.color = disponible >= 0 ? 'var(--green)' : 'var(--red)';
 
   // Savings
   const savEl = document.getElementById('dash-savings');
@@ -980,6 +988,24 @@ function init() {
       showToast('Transaccion eliminada');
       refreshView();
     }
+  });
+
+  // Disponible — saldo base
+  document.getElementById('balanceEditBtn').addEventListener('click', () => {
+    const s = DB.getSettings();
+    document.getElementById('baseBalanceInput').value = s.baseBalance || '';
+    document.getElementById('balanceEditCard').classList.remove('hidden');
+  });
+  document.getElementById('cancelBalance').addEventListener('click', () => {
+    document.getElementById('balanceEditCard').classList.add('hidden');
+  });
+  document.getElementById('saveBalance').addEventListener('click', () => {
+    const s = DB.getSettings();
+    s.baseBalance = parseFloat(document.getElementById('baseBalanceInput').value) || 0;
+    DB.saveSettings(s);
+    document.getElementById('balanceEditCard').classList.add('hidden');
+    showToast('Saldo base guardado');
+    renderDashboard();
   });
 
   // Settings: savings goal

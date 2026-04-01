@@ -47,6 +47,26 @@
           </div>
         </div>
 
+        <div class="stat-card glass balance-card">
+          <div class="stat-icon balance-icon">&#128178;</div>
+          <div class="stat-info">
+            <span class="stat-label">Disponible (total acumulado)</span>
+            <span class="stat-value" id="dash-balance">0 &#8364;</span>
+          </div>
+          <button class="balance-edit-btn" id="balanceEditBtn" title="Editar saldo base">&#9998;</button>
+        </div>
+        <div class="glass balance-edit-card hidden" id="balanceEditCard">
+          <p class="settings-hint">Saldo inicial antes de usar la app (dinero que ya tenías)</p>
+          <div class="input-group">
+            <input type="number" id="baseBalanceInput" class="settings-input" placeholder="0" step="0.01" inputmode="decimal">
+            <span class="input-suffix">&#8364;</span>
+          </div>
+          <div class="balance-edit-btns">
+            <button class="cancel-btn" id="cancelBalance">Cancelar</button>
+            <button class="save-settings-btn" id="saveBalance">Guardar</button>
+          </div>
+        </div>
+
         <div class="savings-card glass">
           <div class="savings-header">
             <span class="savings-label">Ahorro mensual</span>
