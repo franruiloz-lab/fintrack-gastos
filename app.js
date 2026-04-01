@@ -173,7 +173,13 @@ function renderDashboard() {
   const settings     = DB.getSettings();
   const totalExpense = sum(getExpenses());
   const totalIncome  = sum(getIncomes());
-  const refIncome    = totalIncome || settings.refIncome || 0;
+
+  // Disponible acumulado antes de este mes
+  const allTxsPrev   = DB.getTransactions().filter(t => !t.date.startsWith(state.currentMonth));
+  const prevDisp     = (settings.baseBalance || 0)
+                     + sum(allTxsPrev.filter(t => t.type === 'income'))
+                     - sum(allTxsPrev.filter(t => t.type === 'expense'));
+  const refIncome    = prevDisp + totalIncome;
   const savings      = refIncome - totalExpense;
 
   // Stat cards — monthly totals
