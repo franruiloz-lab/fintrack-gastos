@@ -566,6 +566,32 @@ body {
 
 .goal-tab.active { background: var(--purple); color: white; }
 
+/* ===== CAT TYPE TABS ===== */
+.cat-type-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 0.75rem;
+}
+
+.cat-type-tab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.3rem;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-weight: 500;
+}
+
+.cat-type-tab.active { background: var(--purple); color: white; }
+
 /* ===== BUDGET ===== */
 .budget-inputs { display: flex; flex-direction: column; gap: 0.45rem; }
 

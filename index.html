@@ -160,7 +160,13 @@
 
         <div class="glass settings-card">
           <h3>&#127991;&#65039; Mis categorías</h3>
-          <p class="settings-hint">Crea categorías personalizadas con tu propio nombre, icono y color.</p>
+          <p class="settings-hint">Crea categorías personalizadas para cada tipo de movimiento.</p>
+          <div class="cat-type-tabs">
+            <button class="cat-type-tab active" data-cattype="expense">&#128184; Gastos</button>
+            <button class="cat-type-tab" data-cattype="income">&#128176; Ingresos</button>
+            <button class="cat-type-tab" data-cattype="savings">&#127968; Ahorro</button>
+            <button class="cat-type-tab" data-cattype="investment">&#128200; Inversión</button>
+          </div>
           <div id="customCatList" class="custom-cat-list"></div>
           <button class="save-settings-btn" id="newCatBtn">+ Nueva categoría</button>
         </div>

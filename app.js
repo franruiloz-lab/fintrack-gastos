@@ -14,6 +14,24 @@ const CATEGORIES = {
   otros:         { label: 'Otros',          emoji: '📦', color: '#607d8b' },
 };
 
+const INCOME_CATEGORIES = {
+  salario:     { label: 'Salario',      emoji: '💼', color: '#00c853' },
+  freelance:   { label: 'Freelance',    emoji: '💻', color: '#00e5ff' },
+  alquiler:    { label: 'Alquiler',     emoji: '🏠', color: '#7c4dff' },
+  negocio:     { label: 'Negocio',      emoji: '🏪', color: '#ffd740' },
+  dividendos:  { label: 'Dividendos',   emoji: '📈', color: '#ff9800' },
+  regalo:      { label: 'Regalo',       emoji: '🎁', color: '#e91e63' },
+  otros_ing:   { label: 'Otros',        emoji: '💰', color: '#607d8b' },
+};
+
+const SAVINGS_CATEGORIES = {
+  cuenta:      { label: 'Cuenta ahorro', emoji: '🏦', color: '#ffd740' },
+  emergencia:  { label: 'Emergencia',    emoji: '🛡️', color: '#ff9800' },
+  meta:        { label: 'Meta/Hucha',    emoji: '🎯', color: '#00c853' },
+  pension:     { label: 'Pensión',       emoji: '📋', color: '#7c4dff' },
+  otros_aho:   { label: 'Otros',         emoji: '💰', color: '#607d8b' },
+};
+
 const INVESTMENT_CATEGORIES = {
   inv_bolsa:    { label: 'Bolsa/ETF',  emoji: '📈', color: '#00e5ff' },
   inv_cripto:   { label: 'Cripto',     emoji: '🪙', color: '#ffd740' },
@@ -21,6 +39,13 @@ const INVESTMENT_CATEGORIES = {
   inv_fondo:    { label: 'Fondo',      emoji: '📊', color: '#00c853' },
   inv_pension:  { label: 'Pensión',    emoji: '🏦', color: '#ff9800' },
   inv_otros:    { label: 'Otros',      emoji: '💼', color: '#607d8b' },
+};
+
+const BASE_CATEGORIES = {
+  expense:    CATEGORIES,
+  income:     INCOME_CATEGORIES,
+  savings:    SAVINGS_CATEGORIES,
+  investment: INVESTMENT_CATEGORIES,
 };
 
 // =====================================================================
@@ -50,35 +75,38 @@ const DB = {
   saveSettings(s) {
     localStorage.setItem('ft_settings', JSON.stringify(s));
   },
-  getCustomCategories() {
-    return JSON.parse(localStorage.getItem('ft_custom_cats') || '[]');
+  // Custom categories per type
+  // 'expense' uses legacy key ft_custom_cats for backward compat
+  getCustomCategoriesForType(type) {
+    const key = type === 'expense' ? 'ft_custom_cats' : `ft_custom_cats_${type}`;
+    return JSON.parse(localStorage.getItem(key) || '[]');
   },
-  saveCustomCategories(cats) {
-    localStorage.setItem('ft_custom_cats', JSON.stringify(cats));
+  saveCustomCategoriesForType(type, cats) {
+    const key = type === 'expense' ? 'ft_custom_cats' : `ft_custom_cats_${type}`;
+    localStorage.setItem(key, JSON.stringify(cats));
   },
+  // Legacy alias used by existing code paths
+  getCustomCategories() { return this.getCustomCategoriesForType('expense'); },
+  saveCustomCategories(cats) { return this.saveCustomCategoriesForType('expense', cats); },
 };
 
 // =====================================================================
-// DYNAMIC CATEGORIES (base + custom — expense only)
+// DYNAMIC CATEGORIES
 // =====================================================================
-function getAllCategories() {
-  const result = { ...CATEGORIES };
-  DB.getCustomCategories().forEach(cat => {
-    result[cat.id] = { label: cat.label, emoji: cat.emoji, color: cat.color, custom: true };
+function getAllCategoriesForType(type) {
+  const base = { ...(BASE_CATEGORIES[type] || CATEGORIES) };
+  DB.getCustomCategoriesForType(type).forEach(cat => {
+    base[cat.id] = { label: cat.label, emoji: cat.emoji, color: cat.color, custom: true };
   });
-  return result;
+  return base;
 }
 
-// Returns the display category for any transaction type
+// Keep for budget/chart functions that only deal with expenses
+function getAllCategories() { return getAllCategoriesForType('expense'); }
+
 function getCategoryForTransaction(tx) {
-  if (tx.type === 'savings') {
-    return { label: 'Ahorro', emoji: '🏦', color: '#ffd740' };
-  }
-  if (tx.type === 'investment') {
-    return INVESTMENT_CATEGORIES[tx.category] || { label: 'Inversión', emoji: '📈', color: '#00e5ff' };
-  }
-  const allCats = getAllCategories();
-  return allCats[tx.category] || CATEGORIES.otros;
+  const allCats = getAllCategoriesForType(tx.type);
+  return allCats[tx.category] || { label: tx.type, emoji: '💰', color: '#607d8b' };
 }
 
 const CAT_EMOJIS = [
@@ -86,7 +114,8 @@ const CAT_EMOJIS = [
   '💰','🏋️','✈️','🎬','🎵','🐕','🏥','💅','🎓','🛍️',
   '🍺','☕','🎁','🏖','💄','🔧','🚌','⛽','🍕','🎪',
   '💍','🏊','🎯','📸','🌱','🏡','👶','🎭','🎲','💻',
-  '🚀','🎸','🍷','🛁','🐱','🌍','💌','🎀',
+  '🚀','🎸','🍷','🛁','🐱','🌍','💌','🎀','💼','🏦',
+  '📋','🛡️','🏗','🪙','📊','🎯','🏪','📈',
 ];
 
 const CAT_COLORS = [
@@ -107,6 +136,8 @@ const state = {
   catEmoji: '📦',
   catColor: '#7c4dff',
   catModalSource: null,
+  catModalType: 'expense',
+  customCatTab: 'expense',
 };
 
 const charts = { category: null, trend: null, investment: null };
@@ -197,11 +228,9 @@ function renderDashboard() {
   const totalSavingsT   = sum(getSavingsType());
   const totalInvestment = sum(getInvestments());
 
-  // Stat cards — monthly totals
   document.getElementById('dash-income').textContent  = fmtEuro(totalIncome);
   document.getElementById('dash-expense').textContent = fmtEuro(totalExpense);
 
-  // Disponible libre — cash in hand (excl. savings & investments)
   const allTxs = DB.getTransactions();
   const disponible = (settings.baseBalance || 0)
     + sum(allTxs.filter(t => t.type === 'income'))
@@ -213,7 +242,6 @@ function renderDashboard() {
   balEl.textContent = fmtEuro(disponible);
   balEl.style.color = disponible >= 0 ? 'var(--green)' : 'var(--red)';
 
-  // Savings card — driven by explicit savings-type transactions
   const savEl = document.getElementById('dash-savings');
   savEl.textContent = fmtEuro(totalSavingsT);
   savEl.style.color = totalSavingsT > 0 ? 'var(--yellow)' : 'var(--muted)';
@@ -222,7 +250,6 @@ function renderDashboard() {
   if (totalSavingsT > 0) badge.classList.remove('hidden');
   else badge.classList.add('hidden');
 
-  // Margen libre y invertido en footer extra
   const margenLibre = totalIncome - totalExpense - totalSavingsT - totalInvestment;
   const extraEl = document.getElementById('dash-savings-extra');
   const parts = [];
@@ -235,7 +262,6 @@ function renderDashboard() {
     extraEl.classList.add('hidden');
   }
 
-  // Goal progress (based on explicit savings vs goal)
   const allTxsPrev = DB.getTransactions().filter(t => !t.date.startsWith(state.currentMonth));
   const prevDisp = (settings.baseBalance || 0)
     + sum(allTxsPrev.filter(t => t.type === 'income'))
@@ -276,7 +302,7 @@ function calcGoalEuros(settings, refIncome) {
 }
 
 // =====================================================================
-// RENDER: DONUT CHART — GASTOS
+// RENDER: DONUT — GASTOS
 // =====================================================================
 function renderCategoryChart() {
   const allCats  = getAllCategories();
@@ -317,11 +343,7 @@ function renderCategoryChart() {
       cutout: '72%',
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => ` ${fmtEuro(ctx.parsed)} (${Math.round(ctx.parsed / total * 100)}%)`,
-          },
-        },
+        tooltip: { callbacks: { label: ctx => ` ${fmtEuro(ctx.parsed)} (${Math.round(ctx.parsed / total * 100)}%)` } },
       },
     },
   });
@@ -339,9 +361,10 @@ function renderCategoryChart() {
 }
 
 // =====================================================================
-// RENDER: DONUT CHART — INVERSIONES
+// RENDER: DONUT — INVERSIONES
 // =====================================================================
 function renderInvestmentChart() {
+  const allInvCats = getAllCategoriesForType('investment');
   const catInv  = investmentByCategory();
   const total   = Object.values(catInv).reduce((s, v) => s + v, 0);
   const entries = Object.entries(catInv).sort((a, b) => b[1] - a[1]);
@@ -362,10 +385,10 @@ function renderInvestmentChart() {
   charts.investment = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: entries.map(([k]) => (INVESTMENT_CATEGORIES[k] || {}).label || k),
+      labels: entries.map(([k]) => (allInvCats[k] || {}).label || k),
       datasets: [{
         data: entries.map(([, v]) => v),
-        backgroundColor: entries.map(([k]) => (INVESTMENT_CATEGORIES[k] || {}).color || '#607d8b'),
+        backgroundColor: entries.map(([k]) => (allInvCats[k] || {}).color || '#607d8b'),
         borderWidth: 2,
         borderColor: '#080810',
         hoverBorderWidth: 3,
@@ -375,17 +398,13 @@ function renderInvestmentChart() {
       cutout: '72%',
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => ` ${fmtEuro(ctx.parsed)} (${Math.round(ctx.parsed / total * 100)}%)`,
-          },
-        },
+        tooltip: { callbacks: { label: ctx => ` ${fmtEuro(ctx.parsed)} (${Math.round(ctx.parsed / total * 100)}%)` } },
       },
     },
   });
 
   document.getElementById('investmentLegend').innerHTML = entries.map(([k, v]) => {
-    const cat = INVESTMENT_CATEGORIES[k] || { emoji: '💼', label: k, color: '#607d8b' };
+    const cat = allInvCats[k] || { emoji: '💼', label: k, color: '#607d8b' };
     return `
       <div class="legend-item">
         <div class="legend-dot" style="background:${cat.color}"></div>
@@ -406,9 +425,9 @@ function renderTrendChart() {
   const daysInMonth = new Date(y, m, 0).getDate();
   const lastDay  = isCurrentMonth ? today.getDate() : daysInMonth;
 
-  const labels   = [];
-  const expData  = [];
-  const incData  = [];
+  const labels  = [];
+  const expData = [];
+  const incData = [];
 
   const allTxs = DB.getTransactions().filter(tx => tx.date.startsWith(state.currentMonth));
 
@@ -416,7 +435,6 @@ function renderTrendChart() {
     const dateStr = `${state.currentMonth}-${String(d).padStart(2, '0')}`;
     const dayTxs  = allTxs.filter(tx => tx.date === dateStr);
     labels.push(d);
-    // Salidas = gastos + ahorro + inversiones
     expData.push(sum(dayTxs.filter(t => t.type === 'expense' || t.type === 'savings' || t.type === 'investment')));
     incData.push(sum(dayTxs.filter(t => t.type === 'income')));
   }
@@ -429,68 +447,27 @@ function renderTrendChart() {
       labels,
       datasets: [
         {
-          type: 'bar',
-          label: 'Salidas',
-          data: expData,
-          backgroundColor: 'rgba(255,61,113,0.65)',
-          borderRadius: 4,
-          maxBarThickness: 18,
-          order: 2,
+          type: 'bar', label: 'Salidas', data: expData,
+          backgroundColor: 'rgba(255,61,113,0.65)', borderRadius: 4, maxBarThickness: 18, order: 2,
         },
         {
-          type: 'line',
-          label: 'Ingresos',
-          data: incData,
-          borderColor: 'rgba(0,200,83,0.85)',
-          backgroundColor: 'rgba(0,200,83,0.08)',
-          borderWidth: 2,
-          pointRadius: 3,
-          pointBackgroundColor: 'rgba(0,200,83,0.9)',
-          tension: 0.3,
-          fill: true,
-          order: 1,
+          type: 'line', label: 'Ingresos', data: incData,
+          borderColor: 'rgba(0,200,83,0.85)', backgroundColor: 'rgba(0,200,83,0.08)',
+          borderWidth: 2, pointRadius: 3, pointBackgroundColor: 'rgba(0,200,83,0.9)',
+          tension: 0.3, fill: true, order: 1,
         },
       ],
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            color: '#7878a0',
-            font: { family: 'Outfit', size: 11 },
-            boxWidth: 10,
-            padding: 14,
-          },
-        },
-        tooltip: {
-          callbacks: {
-            title: items => `Día ${items[0].label}`,
-            label: ctx => ` ${ctx.dataset.label}: ${fmtEuro(ctx.parsed.y)}`,
-          },
-        },
+        legend: { position: 'bottom', labels: { color: '#7878a0', font: { family: 'Outfit', size: 11 }, boxWidth: 10, padding: 14 } },
+        tooltip: { callbacks: { title: items => `Día ${items[0].label}`, label: ctx => ` ${ctx.dataset.label}: ${fmtEuro(ctx.parsed.y)}` } },
       },
       scales: {
-        x: {
-          grid: { display: false },
-          ticks: {
-            color: '#7878a0',
-            font: { family: 'Outfit', size: 10 },
-            maxTicksLimit: 12,
-          },
-        },
-        y: {
-          min: 0,
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: {
-            color: '#7878a0',
-            font: { family: 'Outfit', size: 10 },
-            callback: v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v,
-          },
-        },
+        x: { grid: { display: false }, ticks: { color: '#7878a0', font: { family: 'Outfit', size: 10 }, maxTicksLimit: 12 } },
+        y: { min: 0, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7878a0', font: { family: 'Outfit', size: 10 }, callback: v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v } },
       },
     },
   });
@@ -527,9 +504,7 @@ function renderTransactions() {
         const lockBadge = tx.type === 'savings' ? '<span class="tx-lock">🔒</span>' : '';
         return `
           <div class="tx-item" data-id="${tx.id}">
-            <div class="tx-cat-icon" style="background:${cat.color}1a">
-              <span>${cat.emoji}</span>
-            </div>
+            <div class="tx-cat-icon" style="background:${cat.color}1a"><span>${cat.emoji}</span></div>
             <div class="tx-info">
               <div class="tx-desc">${tx.description || cat.label}</div>
               <div class="tx-cat-label">${cat.label}</div>
@@ -591,10 +566,7 @@ function renderBudgetProgress(settings) {
     const spent  = catExp[k] || 0;
     const budget = budgets[k] || 0;
     const pct    = budget > 0 ? Math.min(100, (spent / budget) * 100) : null;
-    const color  = pct === null ? cat.color
-                 : pct > 100    ? 'var(--red)'
-                 : pct > 78     ? 'var(--orange)'
-                 : cat.color;
+    const color  = pct === null ? cat.color : pct > 100 ? 'var(--red)' : pct > 78 ? 'var(--orange)' : cat.color;
 
     return `
       <div class="budget-progress-item">
@@ -605,10 +577,7 @@ function renderBudgetProgress(settings) {
             ${pct !== null ? `<span style="color:${color};margin-left:4px">(${Math.round(pct)}%)</span>` : ''}
           </div>
         </div>
-        ${budget > 0 ? `
-          <div class="budget-bar">
-            <div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div>
-          </div>` : ''}
+        ${budget > 0 ? `<div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div>` : ''}
       </div>`;
   }).join('');
 }
@@ -633,184 +602,116 @@ function renderConsejos() {
 // ADVICE ENGINE
 // =====================================================================
 function generateAdvice() {
-  const advice   = [];
-  const allCats  = getAllCategories();
-  const settings = DB.getSettings();
+  const advice      = [];
+  const allCats     = getAllCategories();
+  const settings    = DB.getSettings();
+  const totalExpense    = sum(getExpenses());
+  const totalIncome     = sum(getIncomes());
+  const totalSavingsT   = sum(getSavingsType());
+  const totalInvestment = sum(getInvestments());
+  const refIncome   = totalIncome || settings.refIncome || 0;
+  const goalEuros   = calcGoalEuros(settings, refIncome);
+  const budgets     = settings.budgets || {};
+  const catExp      = expenseByCategory();
+  const margenLibre = totalIncome - totalExpense - totalSavingsT - totalInvestment;
 
-  const expenses       = getExpenses();
-  const incomes        = getIncomes();
-  const savingsType    = getSavingsType();
-  const investments    = getInvestments();
-  const totalExpense   = sum(expenses);
-  const totalIncome    = sum(incomes);
-  const totalSavingsT  = sum(savingsType);
-  const totalInvestment = sum(investments);
-  const refIncome      = totalIncome || settings.refIncome || 0;
-  const goalEuros      = calcGoalEuros(settings, refIncome);
-  const budgets        = settings.budgets || {};
-  const catExp         = expenseByCategory();
-  const margenLibre    = totalIncome - totalExpense - totalSavingsT - totalInvestment;
-
-  // ---- 1. Estado del ahorro ----
   if (goalEuros > 0 && refIncome > 0) {
     const pct = Math.round(totalSavingsT / goalEuros * 100);
     if (totalSavingsT >= goalEuros) {
-      advice.push({
-        type: 'logro', icon: '🏆',
-        title: '¡Objetivo de ahorro superado!',
-        body: `Has bloqueado ${fmtEuro(totalSavingsT)} este mes, superando tu meta de ${fmtEuro(goalEuros)}. ¡Excelente disciplina financiera!`,
-      });
+      advice.push({ type: 'logro', icon: '🏆', title: '¡Objetivo de ahorro superado!', body: `Has bloqueado ${fmtEuro(totalSavingsT)} este mes, superando tu meta de ${fmtEuro(goalEuros)}. ¡Excelente disciplina financiera!` });
     } else if (totalSavingsT > 0) {
-      advice.push({
-        type: 'objetivo', icon: '🎯',
-        title: 'Avanzando hacia tu objetivo',
-        body: `Llevas ${fmtEuro(totalSavingsT)} bloqueados como ahorro (${pct}%). Te faltan ${fmtEuro(goalEuros - totalSavingsT)} para alcanzar tu meta de ${fmtEuro(goalEuros)} este mes.`,
-      });
+      advice.push({ type: 'objetivo', icon: '🎯', title: 'Avanzando hacia tu objetivo', body: `Llevas ${fmtEuro(totalSavingsT)} bloqueados como ahorro (${pct}%). Te faltan ${fmtEuro(goalEuros - totalSavingsT)} para alcanzar tu meta de ${fmtEuro(goalEuros)}.` });
     } else if (totalExpense > 0) {
-      advice.push({
-        type: 'alerta', icon: '⚠️',
-        title: 'Sin ahorro registrado este mes',
-        body: `Aún no has registrado ningún movimiento de tipo Ahorro. Pulsa + y selecciona 🏦 Ahorro para bloquear dinero hacia tu objetivo de ${fmtEuro(goalEuros)}.`,
-      });
+      advice.push({ type: 'alerta', icon: '⚠️', title: 'Sin ahorro registrado este mes', body: `Aún no has registrado ningún movimiento de tipo Ahorro. Pulsa + y selecciona 🏦 Ahorro para bloquear dinero hacia tu objetivo de ${fmtEuro(goalEuros)}.` });
     }
   }
 
-  // ---- 2. Ratio gasto/ingreso ----
   if (refIncome > 0 && totalExpense > 0) {
     const ratio = totalExpense / refIncome;
     if (ratio > 0.93) {
-      advice.push({
-        type: 'alerta', icon: '🚨',
-        title: 'Gastas casi todo lo que ingresas',
-        body: `Tus gastos son el ${Math.round(ratio * 100)}% de tus ingresos. Lo recomendable es no superar el 80% para mantener un colchon de emergencia y ahorro real.`,
-      });
+      advice.push({ type: 'alerta', icon: '🚨', title: 'Gastas casi todo lo que ingresas', body: `Tus gastos son el ${Math.round(ratio * 100)}% de tus ingresos. Lo recomendable es no superar el 80% para mantener un colchon de emergencia.` });
     } else if (ratio < 0.55) {
-      advice.push({
-        type: 'logro', icon: '🌟',
-        title: 'Ratio de gasto excelente',
-        body: `Solo gastas el ${Math.round(ratio * 100)}% de tus ingresos. Tienes un buen margen libre: ${fmtEuro(Math.max(0, margenLibre))}. Considera bloquearlo como ahorro.`,
-      });
+      advice.push({ type: 'logro', icon: '🌟', title: 'Ratio de gasto excelente', body: `Solo gastas el ${Math.round(ratio * 100)}% de tus ingresos. Margen libre este mes: ${fmtEuro(Math.max(0, margenLibre))}. Considera bloquearlo como ahorro.` });
     }
   }
 
-  // ---- 3. Inversiones activas ----
-  if (totalInvestment > 0) {
-    const invPct = refIncome > 0 ? Math.round(totalInvestment / refIncome * 100) : 0;
-    advice.push({
-      type: 'objetivo', icon: '📈',
-      title: `Invirtiendo el ${invPct}% de tus ingresos`,
-      body: `Este mes tienes ${fmtEuro(totalInvestment)} en inversiones. Un buen ritmo inversor a largo plazo suele estar entre el 10-20% de los ingresos.`,
-    });
+  if (totalInvestment > 0 && refIncome > 0) {
+    const invPct = Math.round(totalInvestment / refIncome * 100);
+    advice.push({ type: 'objetivo', icon: '📈', title: `Invirtiendo el ${invPct}% de tus ingresos`, body: `Este mes tienes ${fmtEuro(totalInvestment)} en inversiones. Un buen ritmo inversor a largo plazo suele estar entre el 10-20% de los ingresos.` });
   }
 
-  // ---- 4. Categorias con sobrepresupuesto ----
-  const overBudget = Object.entries(catExp)
-    .filter(([k, v]) => budgets[k] > 0 && v > budgets[k])
-    .sort((a, b) => (b[1] - budgets[b[0]]) - (a[1] - budgets[a[0]]));
-
+  const overBudget = Object.entries(catExp).filter(([k, v]) => budgets[k] > 0 && v > budgets[k]).sort((a, b) => (b[1] - budgets[b[0]]) - (a[1] - budgets[a[0]]));
   if (overBudget.length > 0) {
     const [k, spent] = overBudget[0];
-    const cat        = allCats[k] || CATEGORIES.otros;
-    const over       = spent - budgets[k];
-    advice.push({
-      type: 'alerta', icon: '📊',
-      title: `Sobrepresupuesto en ${cat.label}`,
-      body: `Has gastado ${fmtEuro(spent)} en ${cat.emoji} ${cat.label}, ${fmtEuro(over)} por encima de tu limite de ${fmtEuro(budgets[k])}.`,
-    });
+    const cat = allCats[k] || CATEGORIES.otros;
+    advice.push({ type: 'alerta', icon: '📊', title: `Sobrepresupuesto en ${cat.label}`, body: `Has gastado ${fmtEuro(spent)} en ${cat.emoji} ${cat.label}, ${fmtEuro(spent - budgets[k])} por encima de tu limite de ${fmtEuro(budgets[k])}.` });
   }
 
-  // ---- 5. Categorias cerca del limite ----
-  const nearLimit = Object.entries(catExp)
-    .filter(([k, v]) => budgets[k] > 0 && v >= budgets[k] * 0.8 && v < budgets[k])
-    .sort((a, b) => b[1] / budgets[b[0]] - a[1] / budgets[a[0]]);
-
+  const nearLimit = Object.entries(catExp).filter(([k, v]) => budgets[k] > 0 && v >= budgets[k] * 0.8 && v < budgets[k]).sort((a, b) => b[1] / budgets[b[0]] - a[1] / budgets[a[0]]);
   if (nearLimit.length > 0) {
     const [k, spent] = nearLimit[0];
-    const cat        = allCats[k] || CATEGORIES.otros;
-    const remaining  = budgets[k] - spent;
-    const pct        = Math.round(spent / budgets[k] * 100);
-    advice.push({
-      type: 'objetivo', icon: '⚡',
-      title: `Presupuesto de ${cat.label} casi agotado`,
-      body: `Has consumido el ${pct}% de tu presupuesto en ${cat.emoji} ${cat.label}. Solo te quedan ${fmtEuro(remaining)} hasta fin de mes.`,
-    });
+    const cat = allCats[k] || CATEGORIES.otros;
+    advice.push({ type: 'objetivo', icon: '⚡', title: `Presupuesto de ${cat.label} casi agotado`, body: `Has consumido el ${Math.round(spent / budgets[k] * 100)}% de tu presupuesto en ${cat.emoji} ${cat.label}. Solo te quedan ${fmtEuro(budgets[k] - spent)} hasta fin de mes.` });
   }
 
-  // ---- 6. Comparativa con mes anterior ----
   const prevM   = prevMonth(state.currentMonth);
   const prevExp = sum(getExpenses(prevM));
-
   if (prevExp > 0 && totalExpense > 0) {
-    const diff    = totalExpense - prevExp;
+    const diff = totalExpense - prevExp;
     const diffPct = Math.round(diff / prevExp * 100);
     if (diff > 0 && diffPct > 12) {
-      advice.push({
-        type: 'alerta', icon: '📈',
-        title: 'El gasto subio respecto al mes pasado',
-        body: `Llevas ${fmtEuro(diff)} mas en gastos (+${diffPct}%) que el mes anterior. Revisa que categorias han crecido para actuar antes de que acabe el mes.`,
-      });
+      advice.push({ type: 'alerta', icon: '📈', title: 'El gasto subio respecto al mes pasado', body: `Llevas ${fmtEuro(diff)} mas en gastos (+${diffPct}%) que el mes anterior.` });
     } else if (diff < 0 && Math.abs(diffPct) > 10) {
-      advice.push({
-        type: 'logro', icon: '📉',
-        title: 'Gasto reducido vs mes anterior',
-        body: `¡Muy bien! Este mes gastas ${fmtEuro(Math.abs(diff))} menos (${diffPct}%) que el mes pasado. Sigue con ese habito.`,
-      });
+      advice.push({ type: 'logro', icon: '📉', title: 'Gasto reducido vs mes anterior', body: `¡Muy bien! Este mes gastas ${fmtEuro(Math.abs(diff))} menos (${diffPct}%) que el mes pasado.` });
     }
   }
 
-  // ---- 7. Categoria dominante ----
   const topCat = Object.entries(catExp).sort((a, b) => b[1] - a[1])[0];
   if (topCat && totalExpense > 0) {
     const [k, v] = topCat;
-    const cat    = allCats[k] || CATEGORIES.otros;
-    const pct    = Math.round(v / totalExpense * 100);
+    const cat = allCats[k] || CATEGORIES.otros;
+    const pct = Math.round(v / totalExpense * 100);
     if (pct > 40 && k !== 'vivienda') {
-      advice.push({
-        type: 'sugerencia', icon: '💡',
-        title: `${cat.label} representa el ${pct}% de tus gastos`,
-        body: `Reducir un 20% en ${cat.emoji} ${cat.label} te ahorraría ${fmtEuro(v * 0.2)} adicionales al mes.`,
-      });
+      advice.push({ type: 'sugerencia', icon: '💡', title: `${cat.label} representa el ${pct}% de tus gastos`, body: `Reducir un 20% en ${cat.emoji} ${cat.label} te ahorraría ${fmtEuro(v * 0.2)} adicionales al mes.` });
     }
   }
 
-  // ---- Mensajes base ----
   if (totalExpense === 0 && totalIncome === 0) {
-    advice.push({
-      type: 'sugerencia', icon: '🚀',
-      title: 'Empieza a registrar hoy',
-      body: 'Añade tus ingresos, gastos, ahorro e inversiones para recibir consejos personalizados basados en tus datos reales.',
-    });
+    advice.push({ type: 'sugerencia', icon: '🚀', title: 'Empieza a registrar hoy', body: 'Añade tus ingresos, gastos, ahorro e inversiones para recibir consejos personalizados.' });
   }
-
   if (!goalEuros) {
-    advice.push({
-      type: 'sugerencia', icon: '🎯',
-      title: 'Define tu objetivo de ahorro',
-      body: 'Sin una meta clara, es dificil medir el progreso. Ve a Objetivos y fija cuanto quieres ahorrar este mes.',
-    });
+    advice.push({ type: 'sugerencia', icon: '🎯', title: 'Define tu objetivo de ahorro', body: 'Sin una meta clara, es dificil medir el progreso. Ve a Objetivos y fija cuanto quieres ahorrar este mes.' });
   }
-
   if (Object.values(budgets).every(v => !v)) {
-    advice.push({
-      type: 'sugerencia', icon: '📊',
-      title: 'Configura presupuestos por categoria',
-      body: 'Poner un limite mensual a cada categoria es la tecnica mas eficaz para controlar el gasto.',
-    });
+    advice.push({ type: 'sugerencia', icon: '📊', title: 'Configura presupuestos por categoria', body: 'Poner un limite mensual a cada categoria de gasto es la tecnica mas eficaz para controlar el gasto.' });
   }
 
   return advice;
 }
 
 // =====================================================================
-// CUSTOM CATEGORIES MANAGEMENT
+// CUSTOM CATEGORIES
 // =====================================================================
+const CAT_TYPE_LABELS = {
+  expense:    '💸 Gastos',
+  income:     '💰 Ingresos',
+  savings:    '🏦 Ahorro',
+  investment: '📈 Inversión',
+};
+
 function renderCustomCats() {
-  const cats = DB.getCustomCategories();
+  const type = state.customCatTab;
+  const cats = DB.getCustomCategoriesForType(type);
   const el   = document.getElementById('customCatList');
   if (!el) return;
 
+  // Update tab active state
+  document.querySelectorAll('.cat-type-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.cattype === type);
+  });
+
   if (cats.length === 0) {
-    el.innerHTML = '<p style="color:var(--muted);font-size:0.75rem;padding:0.3rem 0">Sin categorías personalizadas todavía.</p>';
+    el.innerHTML = `<p style="color:var(--muted);font-size:0.75rem;padding:0.3rem 0">Sin categorías personalizadas para ${CAT_TYPE_LABELS[type]}.</p>`;
     return;
   }
 
@@ -818,21 +719,22 @@ function renderCustomCats() {
     <div class="custom-cat-item">
       <div class="custom-cat-icon" style="background:${cat.color}1a">${cat.emoji}</div>
       <span class="custom-cat-name" style="color:${cat.color}">${cat.label}</span>
-      <button class="custom-cat-delete" data-id="${cat.id}">✕</button>
+      <button class="custom-cat-delete" data-id="${cat.id}" data-cattype="${type}">✕</button>
     </div>`
   ).join('');
 
   el.querySelectorAll('.custom-cat-delete').forEach(btn => {
-    btn.addEventListener('click', () => deleteCat(btn.dataset.id));
+    btn.addEventListener('click', () => deleteCat(btn.dataset.id, btn.dataset.cattype));
   });
 }
 
-function openCatModal() {
+function openCatModal(forType) {
+  state.catModalType = forType || state.txType;
   state.catEmoji = '📦';
   state.catColor = '#7c4dff';
-  document.getElementById('catNameInput').value    = '';
-  document.getElementById('catPreviewIcon').textContent       = '📦';
-  document.getElementById('catPreviewIcon').style.background  = '#7c4dff1a';
+  document.getElementById('catNameInput').value   = '';
+  document.getElementById('catPreviewIcon').textContent      = '📦';
+  document.getElementById('catPreviewIcon').style.background = '#7c4dff1a';
 
   document.getElementById('emojiPicker').innerHTML = CAT_EMOJIS.map(e => `
     <button class="emoji-btn${e === state.catEmoji ? ' selected' : ''}" data-emoji="${e}">${e}</button>`
@@ -847,10 +749,7 @@ function openCatModal() {
   });
 
   document.getElementById('colorPalette').innerHTML =
-    CAT_COLORS.map(c => `
-      <button class="color-swatch${c === state.catColor ? ' selected' : ''}"
-              data-color="${c}" style="background:${c}"></button>`
-    ).join('') +
+    CAT_COLORS.map(c => `<button class="color-swatch${c === state.catColor ? ' selected' : ''}" data-color="${c}" style="background:${c}"></button>`).join('') +
     `<input type="color" id="customColorPicker" class="color-custom-input" value="${state.catColor}">`;
 
   document.getElementById('colorPalette').querySelectorAll('.color-swatch').forEach(btn => {
@@ -865,8 +764,7 @@ function openCatModal() {
   document.getElementById('colorPalette').addEventListener('change', e => {
     if (e.target.id === 'customColorPicker') {
       state.catColor = e.target.value;
-      document.getElementById('colorPalette').querySelectorAll('.color-swatch')
-        .forEach(b => b.classList.remove('selected'));
+      document.getElementById('colorPalette').querySelectorAll('.color-swatch').forEach(b => b.classList.remove('selected'));
       document.getElementById('catPreviewIcon').style.background = state.catColor + '1a';
     }
   });
@@ -885,27 +783,31 @@ function saveCat() {
     return;
   }
 
-  const cats = DB.getCustomCategories();
-  cats.push({
+  const type = state.catModalType;
+  const cats = DB.getCustomCategoriesForType(type);
+  const newCat = {
     id:    'c_' + Date.now().toString(36),
     label: name,
     emoji: state.catEmoji,
     color: state.catColor,
-  });
-  DB.saveCustomCategories(cats);
+  };
+  cats.push(newCat);
+  DB.saveCustomCategoriesForType(type, cats);
   document.getElementById('catModal').classList.add('hidden');
-  renderCustomCats();
   showToast('Categoría creada');
 
   if (state.catModalSource === 'addTx') {
     state.catModalSource = null;
-    state.selectedCat = cats[cats.length - 1].id;
+    state.selectedCat = newCat.id;
     buildCatGrid();
+  } else {
+    renderCustomCats();
   }
 }
 
-function deleteCat(id) {
-  DB.saveCustomCategories(DB.getCustomCategories().filter(c => c.id !== id));
+function deleteCat(id, type) {
+  type = type || state.customCatTab;
+  DB.saveCustomCategoriesForType(type, DB.getCustomCategoriesForType(type).filter(c => c.id !== id));
   renderCustomCats();
   showToast('Categoría eliminada');
 }
@@ -932,37 +834,13 @@ function openAddModal() {
 
 function buildCatGrid() {
   const grid = document.getElementById('catGrid');
+  const type = state.txType;
+  const allCats = getAllCategoriesForType(type);
 
-  // Ahorro: auto-asigna categoría, muestra mensaje informativo
-  if (state.txType === 'savings') {
-    state.selectedCat = '__savings';
-    grid.innerHTML = `<div class="savings-type-hint">🏦 Este importe quedará bloqueado como ahorro del mes y contabilizará en tu objetivo de ahorro</div>`;
-    return;
-  }
-
-  // Inversión: muestra categorías de inversión
-  if (state.txType === 'investment') {
-    state.selectedCat = null;
-    grid.innerHTML = Object.entries(INVESTMENT_CATEGORIES).map(([k, cat]) => `
-      <button class="cat-btn${state.selectedCat === k ? ' selected' : ''}" data-cat="${k}">
-        <span class="cat-emoji">${cat.emoji}</span>
-        <span class="cat-label">${cat.label}</span>
-      </button>`
-    ).join('');
-    grid.querySelectorAll('.cat-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.selectedCat = btn.dataset.cat;
-        grid.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-      });
-    });
-    return;
-  }
-
-  // Gasto / Ingreso: categorías normales + personalizadas
   state.selectedCat = null;
-  grid.innerHTML = Object.entries(getAllCategories()).map(([k, cat]) => `
-    <button class="cat-btn${state.selectedCat === k ? ' selected' : ''}" data-cat="${k}">
+
+  grid.innerHTML = Object.entries(allCats).map(([k, cat]) => `
+    <button class="cat-btn" data-cat="${k}">
       <span class="cat-emoji">${cat.emoji}</span>
       <span class="cat-label">${cat.label}</span>
     </button>`
@@ -982,7 +860,7 @@ function buildCatGrid() {
 
   document.getElementById('catGridNewBtn').addEventListener('click', () => {
     state.catModalSource = 'addTx';
-    openCatModal();
+    openCatModal(type);
   });
 }
 
@@ -1028,15 +906,10 @@ function exportToExcel() {
     return;
   }
 
-  const typeLabel = {
-    expense:    'Gasto',
-    income:     'Ingreso',
-    savings:    'Ahorro',
-    investment: 'Inversión',
-  };
+  const typeLabel = { expense: 'Gasto', income: 'Ingreso', savings: 'Ahorro', investment: 'Inversión' };
 
   const rows = txs.map(tx => {
-    const cat = getCategoryForTransaction(tx);
+    const cat  = getCategoryForTransaction(tx);
     const sign = tx.type === 'income' ? 1 : -1;
     return {
       'Fecha':        tx.date,
@@ -1048,26 +921,18 @@ function exportToExcel() {
   });
 
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 16 },
-    { wch: 30 },
-    { wch: 14 },
-  ];
+  ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 30 }, { wch: 14 }];
 
-  const wb = XLSX.utils.book_new();
+  const wb   = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Transacciones');
 
-  const today  = new Date().toISOString().split('T')[0];
-  const wbout  = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob   = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url    = URL.createObjectURL(blob);
-  const a      = document.createElement('a');
-  a.href       = url;
-  a.download   = `fintrack_${today}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
+  const today = new Date().toISOString().split('T')[0];
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob  = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href = url; a.download = `fintrack_${today}.xlsx`;
+  document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
   showToast('Excel descargado');
 }
@@ -1101,14 +966,11 @@ function showToast(msg) {
   const t = document.createElement('div');
   t.textContent = msg;
   t.style.cssText = [
-    'position:fixed', 'bottom:84px', 'left:50%',
-    'transform:translateX(-50%)',
-    'background:rgba(124,77,255,0.88)', 'color:#fff',
-    'padding:0.5rem 1.2rem', 'border-radius:100px',
-    'font-family:Outfit,sans-serif', 'font-size:0.84rem', 'font-weight:500',
-    'z-index:200', 'backdrop-filter:blur(10px)',
-    'animation:fadeInUp 0.25s ease, fadeOut 0.3s ease 1.5s forwards',
-    'white-space:nowrap',
+    'position:fixed', 'bottom:84px', 'left:50%', 'transform:translateX(-50%)',
+    'background:rgba(124,77,255,0.88)', 'color:#fff', 'padding:0.5rem 1.2rem',
+    'border-radius:100px', 'font-family:Outfit,sans-serif', 'font-size:0.84rem',
+    'font-weight:500', 'z-index:200', 'backdrop-filter:blur(10px)',
+    'animation:fadeInUp 0.25s ease, fadeOut 0.3s ease 1.5s forwards', 'white-space:nowrap',
   ].join(';');
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2000);
@@ -1139,16 +1001,13 @@ function init() {
   document.getElementById('closeModal').addEventListener('click', () => {
     document.getElementById('addModal').classList.add('hidden');
   });
-
   document.getElementById('addModal').addEventListener('click', e => {
     if (e.target === e.currentTarget) document.getElementById('addModal').classList.add('hidden');
   });
 
-  // Tipo de transacción — reconstruye grid al cambiar
   document.querySelectorAll('.type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       state.txType = btn.dataset.type;
-      state.selectedCat = null;
       document.querySelectorAll('.type-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.type === btn.dataset.type);
       });
@@ -1157,7 +1016,6 @@ function init() {
   });
 
   document.getElementById('saveBtn').addEventListener('click', saveTransaction);
-
   document.getElementById('amountInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') saveTransaction();
   });
@@ -1166,7 +1024,6 @@ function init() {
     document.getElementById('deleteModal').classList.add('hidden');
     state.deleteId = null;
   });
-
   document.getElementById('confirmDelete').addEventListener('click', () => {
     if (state.deleteId) {
       DB.deleteTransaction(state.deleteId);
@@ -1226,7 +1083,15 @@ function init() {
     showToast('Presupuestos guardados');
   });
 
-  document.getElementById('newCatBtn').addEventListener('click', openCatModal);
+  // Custom categories section tabs
+  document.querySelectorAll('.cat-type-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.customCatTab = btn.dataset.cattype;
+      renderCustomCats();
+    });
+  });
+
+  document.getElementById('newCatBtn').addEventListener('click', () => openCatModal(state.customCatTab));
   document.getElementById('closeCatModal').addEventListener('click', () => {
     document.getElementById('catModal').classList.add('hidden');
   });
