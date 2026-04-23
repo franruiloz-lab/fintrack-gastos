@@ -8,6 +8,7 @@
   --green: #00c853;
   --red: #ff3d71;
   --orange: #ff9800;
+  --yellow: #ffd740;
   --text: #ffffff;
   --muted: #7878a0;
   --nav-h: 72px;
@@ -278,13 +279,27 @@ body {
 .savings-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
   margin-bottom: 0.8rem;
 }
 
-.savings-label { font-size: 0.82rem; color: var(--muted); }
+.savings-label { font-size: 0.82rem; color: var(--muted); padding-top: 4px; }
+
+.savings-amount-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
 
 .savings-value { font-size: 1.55rem; font-weight: 700; }
+
+.savings-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--yellow);
+  letter-spacing: 0.2px;
+}
 
 .savings-bar {
   height: 7px;
@@ -298,7 +313,7 @@ body {
   height: 100%;
   width: 0%;
   border-radius: 100px;
-  background: linear-gradient(90deg, var(--purple), var(--cyan));
+  background: linear-gradient(90deg, #ffd740, #ffab00);
   transition: width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
   max-width: 100%;
 }
@@ -306,6 +321,14 @@ body {
 .savings-footer {
   display: flex;
   justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.savings-extra {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
   font-size: 0.72rem;
   color: var(--muted);
 }
@@ -381,6 +404,27 @@ body {
 }
 
 /* ===== TRANSACTIONS ===== */
+.gastos-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.export-btn {
+  background: rgba(0, 200, 83, 0.1);
+  border: 1px solid rgba(0, 200, 83, 0.2);
+  color: var(--green);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.4rem 0.9rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.export-btn:hover { background: rgba(0, 200, 83, 0.2); }
+.export-btn:active { transform: scale(0.96); }
+
 .empty-state {
   text-align: center;
   padding: 4rem 1rem;
@@ -438,9 +482,13 @@ body {
 
 .tx-cat-label { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
 
-.tx-amount { font-size: 0.95rem; font-weight: 700; flex-shrink: 0; }
-.tx-amount.expense { color: var(--red); }
-.tx-amount.income { color: var(--green); }
+.tx-amount { font-size: 0.95rem; font-weight: 700; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
+.tx-amount.expense    { color: var(--red); }
+.tx-amount.income     { color: var(--green); }
+.tx-amount.savings    { color: var(--yellow); }
+.tx-amount.investment { color: var(--cyan); }
+
+.tx-lock { font-size: 0.7rem; }
 
 /* ===== SETTINGS / OBJETIVOS ===== */
 .settings-card {
@@ -691,6 +739,7 @@ body {
   justify-content: center;
 }
 
+/* ===== TYPE TOGGLE — 2x2 GRID ===== */
 .type-toggle {
   display: flex;
   gap: 4px;
@@ -699,21 +748,30 @@ body {
   padding: 4px;
 }
 
+.type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
 .type-btn {
-  flex: 1;
   background: none;
   border: none;
   color: var(--muted);
   font-family: 'Outfit', sans-serif;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  padding: 0.5rem;
+  padding: 0.5rem 0.4rem;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.18s;
+  white-space: nowrap;
 }
 
 .type-btn.active { background: var(--purple); color: white; }
+
+.type-btn[data-type="savings"].active    { background: #b8860b; color: white; }
+.type-btn[data-type="investment"].active { background: #007c99; color: white; }
 
 .amount-group {
   display: flex;
@@ -788,6 +846,20 @@ body {
 
 .cat-btn-new:hover { border-color: var(--purple); }
 .cat-btn-new:hover .cat-emoji { color: var(--purple); }
+
+/* ===== SAVINGS HINT IN MODAL ===== */
+.savings-type-hint {
+  grid-column: 1 / -1;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 215, 64, 0.07);
+  border: 1px solid rgba(255, 215, 64, 0.2);
+  border-radius: 14px;
+  color: var(--yellow);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.5;
+}
 
 .desc-input, .date-input {
   background: rgba(255, 255, 255, 0.05);

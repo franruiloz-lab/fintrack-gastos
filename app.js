@@ -14,6 +14,15 @@ const CATEGORIES = {
   otros:         { label: 'Otros',          emoji: '📦', color: '#607d8b' },
 };
 
+const INVESTMENT_CATEGORIES = {
+  inv_bolsa:    { label: 'Bolsa/ETF',  emoji: '📈', color: '#00e5ff' },
+  inv_cripto:   { label: 'Cripto',     emoji: '🪙', color: '#ffd740' },
+  inv_inmueble: { label: 'Inmueble',   emoji: '🏗', color: '#7c4dff' },
+  inv_fondo:    { label: 'Fondo',      emoji: '📊', color: '#00c853' },
+  inv_pension:  { label: 'Pensión',    emoji: '🏦', color: '#ff9800' },
+  inv_otros:    { label: 'Otros',      emoji: '💼', color: '#607d8b' },
+};
+
 // =====================================================================
 // DB — localStorage wrapper
 // =====================================================================
@@ -50,7 +59,7 @@ const DB = {
 };
 
 // =====================================================================
-// DYNAMIC CATEGORIES (base + custom)
+// DYNAMIC CATEGORIES (base + custom — expense only)
 // =====================================================================
 function getAllCategories() {
   const result = { ...CATEGORIES };
@@ -58,6 +67,18 @@ function getAllCategories() {
     result[cat.id] = { label: cat.label, emoji: cat.emoji, color: cat.color, custom: true };
   });
   return result;
+}
+
+// Returns the display category for any transaction type
+function getCategoryForTransaction(tx) {
+  if (tx.type === 'savings') {
+    return { label: 'Ahorro', emoji: '🏦', color: '#ffd740' };
+  }
+  if (tx.type === 'investment') {
+    return INVESTMENT_CATEGORIES[tx.category] || { label: 'Inversión', emoji: '📈', color: '#00e5ff' };
+  }
+  const allCats = getAllCategories();
+  return allCats[tx.category] || CATEGORIES.otros;
 }
 
 const CAT_EMOJIS = [
@@ -88,7 +109,7 @@ const state = {
   catModalSource: null,
 };
 
-const charts = { category: null, trend: null };
+const charts = { category: null, trend: null, investment: null };
 
 // =====================================================================
 // DATE / FORMAT HELPERS
@@ -115,16 +136,6 @@ function nextMonth(ym) {
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, m, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function last6Months() {
-  const months = [];
-  let ym = state.currentMonth;
-  for (let i = 0; i < 6; i++) {
-    months.unshift(ym);
-    ym = prevMonth(ym);
-  }
-  return months;
 }
 
 function fmtEuro(n) {
@@ -154,9 +165,11 @@ function getTxs(ym) {
   return DB.getTransactions().filter(tx => tx.date.startsWith(ym));
 }
 
-function getExpenses(ym) { return getTxs(ym).filter(t => t.type === 'expense'); }
-function getIncomes(ym)  { return getTxs(ym).filter(t => t.type === 'income'); }
-function sum(txs)        { return txs.reduce((s, t) => s + t.amount, 0); }
+function getExpenses(ym)    { return getTxs(ym).filter(t => t.type === 'expense'); }
+function getIncomes(ym)     { return getTxs(ym).filter(t => t.type === 'income'); }
+function getSavingsType(ym) { return getTxs(ym).filter(t => t.type === 'savings'); }
+function getInvestments(ym) { return getTxs(ym).filter(t => t.type === 'investment'); }
+function sum(txs)           { return txs.reduce((s, t) => s + t.amount, 0); }
 
 function expenseByCategory(ym) {
   const result = {};
@@ -166,52 +179,82 @@ function expenseByCategory(ym) {
   return result;
 }
 
+function investmentByCategory(ym) {
+  const result = {};
+  getInvestments(ym).forEach(tx => {
+    result[tx.category] = (result[tx.category] || 0) + tx.amount;
+  });
+  return result;
+}
+
 // =====================================================================
 // RENDER: DASHBOARD
 // =====================================================================
 function renderDashboard() {
-  const settings     = DB.getSettings();
-  const totalExpense = sum(getExpenses());
-  const totalIncome  = sum(getIncomes());
-
-  // Disponible acumulado antes de este mes
-  const allTxsPrev   = DB.getTransactions().filter(t => !t.date.startsWith(state.currentMonth));
-  const prevDisp     = (settings.baseBalance || 0)
-                     + sum(allTxsPrev.filter(t => t.type === 'income'))
-                     - sum(allTxsPrev.filter(t => t.type === 'expense'));
-  const refIncome    = prevDisp + totalIncome;
-  const savings      = refIncome - totalExpense;
+  const settings        = DB.getSettings();
+  const totalExpense    = sum(getExpenses());
+  const totalIncome     = sum(getIncomes());
+  const totalSavingsT   = sum(getSavingsType());
+  const totalInvestment = sum(getInvestments());
 
   // Stat cards — monthly totals
   document.getElementById('dash-income').textContent  = fmtEuro(totalIncome);
   document.getElementById('dash-expense').textContent = fmtEuro(totalExpense);
 
-  // Disponible — saldo histórico acumulado
-  const allTxs      = DB.getTransactions();
-  const disponible  = (settings.baseBalance || 0)
-                    + sum(allTxs.filter(t => t.type === 'income'))
-                    - sum(allTxs.filter(t => t.type === 'expense'));
+  // Disponible libre — cash in hand (excl. savings & investments)
+  const allTxs = DB.getTransactions();
+  const disponible = (settings.baseBalance || 0)
+    + sum(allTxs.filter(t => t.type === 'income'))
+    - sum(allTxs.filter(t => t.type === 'expense'))
+    - sum(allTxs.filter(t => t.type === 'savings'))
+    - sum(allTxs.filter(t => t.type === 'investment'));
+
   const balEl = document.getElementById('dash-balance');
   balEl.textContent = fmtEuro(disponible);
   balEl.style.color = disponible >= 0 ? 'var(--green)' : 'var(--red)';
 
-  // Savings
+  // Savings card — driven by explicit savings-type transactions
   const savEl = document.getElementById('dash-savings');
-  savEl.textContent   = fmtEuro(savings);
-  savEl.style.color   = savings >= 0 ? 'var(--green)' : 'var(--red)';
+  savEl.textContent = fmtEuro(totalSavingsT);
+  savEl.style.color = totalSavingsT > 0 ? 'var(--yellow)' : 'var(--muted)';
 
-  // Goal progress
+  const badge = document.getElementById('dash-savings-badge');
+  if (totalSavingsT > 0) badge.classList.remove('hidden');
+  else badge.classList.add('hidden');
+
+  // Margen libre y invertido en footer extra
+  const margenLibre = totalIncome - totalExpense - totalSavingsT - totalInvestment;
+  const extraEl = document.getElementById('dash-savings-extra');
+  const parts = [];
+  if (margenLibre > 0) parts.push(`Margen libre: ${fmtEuro(margenLibre)}`);
+  if (totalInvestment > 0) parts.push(`Invertido: ${fmtEuro(totalInvestment)}`);
+  if (parts.length > 0) {
+    extraEl.textContent = parts.join('  ·  ');
+    extraEl.classList.remove('hidden');
+  } else {
+    extraEl.classList.add('hidden');
+  }
+
+  // Goal progress (based on explicit savings vs goal)
+  const allTxsPrev = DB.getTransactions().filter(t => !t.date.startsWith(state.currentMonth));
+  const prevDisp = (settings.baseBalance || 0)
+    + sum(allTxsPrev.filter(t => t.type === 'income'))
+    - sum(allTxsPrev.filter(t => t.type === 'expense'))
+    - sum(allTxsPrev.filter(t => t.type === 'savings'))
+    - sum(allTxsPrev.filter(t => t.type === 'investment'));
+  const refIncome = prevDisp + totalIncome;
   const goalEuros = calcGoalEuros(settings, refIncome);
-  const fillEl    = document.getElementById('dash-savings-fill');
-  const pctEl     = document.getElementById('dash-savings-pct');
-  const goalEl    = document.getElementById('dash-savings-goal');
+
+  const fillEl = document.getElementById('dash-savings-fill');
+  const pctEl  = document.getElementById('dash-savings-pct');
+  const goalEl = document.getElementById('dash-savings-goal');
 
   if (goalEuros > 0) {
-    const pct = Math.min(100, Math.max(0, (savings / goalEuros) * 100));
+    const pct = Math.min(100, Math.max(0, (totalSavingsT / goalEuros) * 100));
     fillEl.style.width      = pct + '%';
-    fillEl.style.background = savings >= goalEuros
+    fillEl.style.background = totalSavingsT >= goalEuros
       ? 'linear-gradient(90deg, var(--green), #69f0ae)'
-      : 'linear-gradient(90deg, var(--purple), var(--cyan))';
+      : 'linear-gradient(90deg, #ffd740, #ffab00)';
     pctEl.textContent  = `${Math.round(pct)}% del objetivo`;
     goalEl.textContent = `Meta: ${fmtEuro(goalEuros)}`;
   } else {
@@ -221,6 +264,7 @@ function renderDashboard() {
   }
 
   renderCategoryChart();
+  renderInvestmentChart();
   renderTrendChart();
 }
 
@@ -232,7 +276,7 @@ function calcGoalEuros(settings, refIncome) {
 }
 
 // =====================================================================
-// RENDER: DONUT CHART
+// RENDER: DONUT CHART — GASTOS
 // =====================================================================
 function renderCategoryChart() {
   const allCats  = getAllCategories();
@@ -282,7 +326,6 @@ function renderCategoryChart() {
     },
   });
 
-  // Legend (top 5)
   document.getElementById('categoryLegend').innerHTML = entries.slice(0, 5).map(([k, v]) => {
     const cat = allCats[k] || CATEGORIES.otros;
     return `
@@ -296,7 +339,65 @@ function renderCategoryChart() {
 }
 
 // =====================================================================
-// RENDER: DAILY CHART (current month)
+// RENDER: DONUT CHART — INVERSIONES
+// =====================================================================
+function renderInvestmentChart() {
+  const catInv  = investmentByCategory();
+  const total   = Object.values(catInv).reduce((s, v) => s + v, 0);
+  const entries = Object.entries(catInv).sort((a, b) => b[1] - a[1]);
+  const card    = document.getElementById('investmentChartCard');
+
+  if (total === 0) {
+    card.style.display = 'none';
+    if (charts.investment) { charts.investment.destroy(); charts.investment = null; }
+    return;
+  }
+
+  card.style.display = '';
+  document.getElementById('investmentTotal').textContent = fmtEuro(total);
+
+  if (charts.investment) { charts.investment.destroy(); charts.investment = null; }
+
+  const ctx = document.getElementById('investmentChart').getContext('2d');
+  charts.investment = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(([k]) => (INVESTMENT_CATEGORIES[k] || {}).label || k),
+      datasets: [{
+        data: entries.map(([, v]) => v),
+        backgroundColor: entries.map(([k]) => (INVESTMENT_CATEGORIES[k] || {}).color || '#607d8b'),
+        borderWidth: 2,
+        borderColor: '#080810',
+        hoverBorderWidth: 3,
+      }],
+    },
+    options: {
+      cutout: '72%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${fmtEuro(ctx.parsed)} (${Math.round(ctx.parsed / total * 100)}%)`,
+          },
+        },
+      },
+    },
+  });
+
+  document.getElementById('investmentLegend').innerHTML = entries.map(([k, v]) => {
+    const cat = INVESTMENT_CATEGORIES[k] || { emoji: '💼', label: k, color: '#607d8b' };
+    return `
+      <div class="legend-item">
+        <div class="legend-dot" style="background:${cat.color}"></div>
+        <span class="legend-label">${cat.emoji} ${cat.label}</span>
+        <span class="legend-amount">${fmtEuro(v)}</span>
+        <span class="legend-pct">${Math.round(v / total * 100)}%</span>
+      </div>`;
+  }).join('');
+}
+
+// =====================================================================
+// RENDER: DAILY CHART
 // =====================================================================
 function renderTrendChart() {
   const [y, m]   = state.currentMonth.split('-').map(Number);
@@ -315,7 +416,8 @@ function renderTrendChart() {
     const dateStr = `${state.currentMonth}-${String(d).padStart(2, '0')}`;
     const dayTxs  = allTxs.filter(tx => tx.date === dateStr);
     labels.push(d);
-    expData.push(sum(dayTxs.filter(t => t.type === 'expense')));
+    // Salidas = gastos + ahorro + inversiones
+    expData.push(sum(dayTxs.filter(t => t.type === 'expense' || t.type === 'savings' || t.type === 'investment')));
     incData.push(sum(dayTxs.filter(t => t.type === 'income')));
   }
 
@@ -328,7 +430,7 @@ function renderTrendChart() {
       datasets: [
         {
           type: 'bar',
-          label: 'Gastos',
+          label: 'Salidas',
           data: expData,
           backgroundColor: 'rgba(255,61,113,0.65)',
           borderRadius: 4,
@@ -410,20 +512,19 @@ function renderTransactions() {
 
   empEl.classList.add('hidden');
 
-  // Group by date
   const groups = {};
   txs.forEach(tx => {
     if (!groups[tx.date]) groups[tx.date] = [];
     groups[tx.date].push(tx);
   });
 
-  const allCats = getAllCategories();
   listEl.innerHTML = Object.entries(groups).map(([date, items]) => `
     <div class="tx-day-group">
       <div class="tx-day-header">${fmtDate(date)}</div>
       ${items.map(tx => {
-        const cat  = allCats[tx.category] || CATEGORIES.otros;
-        const sign = tx.type === 'expense' ? '-' : '+';
+        const cat  = getCategoryForTransaction(tx);
+        const sign = tx.type === 'income' ? '+' : '-';
+        const lockBadge = tx.type === 'savings' ? '<span class="tx-lock">🔒</span>' : '';
         return `
           <div class="tx-item" data-id="${tx.id}">
             <div class="tx-cat-icon" style="background:${cat.color}1a">
@@ -433,7 +534,7 @@ function renderTransactions() {
               <div class="tx-desc">${tx.description || cat.label}</div>
               <div class="tx-cat-label">${cat.label}</div>
             </div>
-            <div class="tx-amount ${tx.type}">${sign}${fmtEuro(tx.amount)}</div>
+            <div class="tx-amount ${tx.type}">${sign}${fmtEuro(tx.amount)}${lockBadge}</div>
           </div>`;
       }).join('')}
     </div>`
@@ -460,7 +561,6 @@ function renderObjetivos() {
     btn.classList.toggle('active', btn.dataset.gtype === (settings.goalType || 'amount'));
   });
 
-  // Budget inputs
   document.getElementById('budgetInputs').innerHTML = Object.entries(getAllCategories()).map(([k, cat]) => `
     <div class="budget-input-row">
       <div class="budget-cat-label">${cat.emoji} ${cat.label}</div>
@@ -537,36 +637,40 @@ function generateAdvice() {
   const allCats  = getAllCategories();
   const settings = DB.getSettings();
 
-  const expenses     = getExpenses();
-  const incomes      = getIncomes();
-  const totalExpense = sum(expenses);
-  const totalIncome  = sum(incomes);
-  const refIncome    = totalIncome || settings.refIncome || 0;
-  const savings      = refIncome - totalExpense;
-  const goalEuros    = calcGoalEuros(settings, refIncome);
-  const budgets      = settings.budgets || {};
-  const catExp       = expenseByCategory();
+  const expenses       = getExpenses();
+  const incomes        = getIncomes();
+  const savingsType    = getSavingsType();
+  const investments    = getInvestments();
+  const totalExpense   = sum(expenses);
+  const totalIncome    = sum(incomes);
+  const totalSavingsT  = sum(savingsType);
+  const totalInvestment = sum(investments);
+  const refIncome      = totalIncome || settings.refIncome || 0;
+  const goalEuros      = calcGoalEuros(settings, refIncome);
+  const budgets        = settings.budgets || {};
+  const catExp         = expenseByCategory();
+  const margenLibre    = totalIncome - totalExpense - totalSavingsT - totalInvestment;
 
   // ---- 1. Estado del ahorro ----
   if (goalEuros > 0 && refIncome > 0) {
-    const pct = Math.round(savings / goalEuros * 100);
-    if (savings >= goalEuros) {
+    const pct = Math.round(totalSavingsT / goalEuros * 100);
+    if (totalSavingsT >= goalEuros) {
       advice.push({
         type: 'logro', icon: '🏆',
         title: '¡Objetivo de ahorro superado!',
-        body: `Has ahorrado ${fmtEuro(savings)} este mes, superando tu meta de ${fmtEuro(goalEuros)}. ¡Excelente disciplina financiera!`,
+        body: `Has bloqueado ${fmtEuro(totalSavingsT)} este mes, superando tu meta de ${fmtEuro(goalEuros)}. ¡Excelente disciplina financiera!`,
       });
-    } else if (savings > 0) {
+    } else if (totalSavingsT > 0) {
       advice.push({
         type: 'objetivo', icon: '🎯',
         title: 'Avanzando hacia tu objetivo',
-        body: `Llevas ${fmtEuro(savings)} ahorrados (${pct}%). Te faltan ${fmtEuro(goalEuros - savings)} para alcanzar tu meta de ${fmtEuro(goalEuros)} este mes.`,
+        body: `Llevas ${fmtEuro(totalSavingsT)} bloqueados como ahorro (${pct}%). Te faltan ${fmtEuro(goalEuros - totalSavingsT)} para alcanzar tu meta de ${fmtEuro(goalEuros)} este mes.`,
       });
     } else if (totalExpense > 0) {
       advice.push({
         type: 'alerta', icon: '⚠️',
-        title: 'Gastos superiores a ingresos',
-        body: `Este mes gastas ${fmtEuro(totalExpense)} con unos ingresos de referencia de ${fmtEuro(refIncome)}. Reducir los gastos variables te devolvera al terreno positivo.`,
+        title: 'Sin ahorro registrado este mes',
+        body: `Aún no has registrado ningún movimiento de tipo Ahorro. Pulsa + y selecciona 🏦 Ahorro para bloquear dinero hacia tu objetivo de ${fmtEuro(goalEuros)}.`,
       });
     }
   }
@@ -583,13 +687,23 @@ function generateAdvice() {
     } else if (ratio < 0.55) {
       advice.push({
         type: 'logro', icon: '🌟',
-        title: 'Ratio de ahorro excelente',
-        body: `Solo gastas el ${Math.round(ratio * 100)}% de tus ingresos. Tienes un margen de ahorro muy saludable. ¿Tienes ya un fondo de emergencia de 3-6 meses de gastos?`,
+        title: 'Ratio de gasto excelente',
+        body: `Solo gastas el ${Math.round(ratio * 100)}% de tus ingresos. Tienes un buen margen libre: ${fmtEuro(Math.max(0, margenLibre))}. Considera bloquearlo como ahorro.`,
       });
     }
   }
 
-  // ---- 3. Categorias con sobrepresupuesto ----
+  // ---- 3. Inversiones activas ----
+  if (totalInvestment > 0) {
+    const invPct = refIncome > 0 ? Math.round(totalInvestment / refIncome * 100) : 0;
+    advice.push({
+      type: 'objetivo', icon: '📈',
+      title: `Invirtiendo el ${invPct}% de tus ingresos`,
+      body: `Este mes tienes ${fmtEuro(totalInvestment)} en inversiones. Un buen ritmo inversor a largo plazo suele estar entre el 10-20% de los ingresos.`,
+    });
+  }
+
+  // ---- 4. Categorias con sobrepresupuesto ----
   const overBudget = Object.entries(catExp)
     .filter(([k, v]) => budgets[k] > 0 && v > budgets[k])
     .sort((a, b) => (b[1] - budgets[b[0]]) - (a[1] - budgets[a[0]]));
@@ -605,7 +719,7 @@ function generateAdvice() {
     });
   }
 
-  // ---- 4. Categorias cerca del limite (80-100%) ----
+  // ---- 5. Categorias cerca del limite ----
   const nearLimit = Object.entries(catExp)
     .filter(([k, v]) => budgets[k] > 0 && v >= budgets[k] * 0.8 && v < budgets[k])
     .sort((a, b) => b[1] / budgets[b[0]] - a[1] / budgets[a[0]]);
@@ -622,7 +736,7 @@ function generateAdvice() {
     });
   }
 
-  // ---- 5. Comparativa con mes anterior ----
+  // ---- 6. Comparativa con mes anterior ----
   const prevM   = prevMonth(state.currentMonth);
   const prevExp = sum(getExpenses(prevM));
 
@@ -644,37 +758,27 @@ function generateAdvice() {
     }
   }
 
-  // ---- 6. Categoria dominante ----
+  // ---- 7. Categoria dominante ----
   const topCat = Object.entries(catExp).sort((a, b) => b[1] - a[1])[0];
   if (topCat && totalExpense > 0) {
     const [k, v] = topCat;
     const cat    = allCats[k] || CATEGORIES.otros;
     const pct    = Math.round(v / totalExpense * 100);
     if (pct > 40 && k !== 'vivienda') {
-      const saving20 = v * 0.2;
       advice.push({
         type: 'sugerencia', icon: '💡',
         title: `${cat.label} representa el ${pct}% de tus gastos`,
-        body: `Esta categoria domina tu presupuesto (${fmtEuro(v)}). Reducir un 20% en ${cat.emoji} ${cat.label} te ahorraría ${fmtEuro(saving20)} adicionales al mes.`,
+        body: `Reducir un 20% en ${cat.emoji} ${cat.label} te ahorraría ${fmtEuro(v * 0.2)} adicionales al mes.`,
       });
     }
   }
 
-  // ---- 7. Fondo de emergencia ----
-  if (refIncome > 0 && totalExpense > 0 && savings > totalExpense * 0.3 && advice.length < 3) {
-    advice.push({
-      type: 'sugerencia', icon: '🏦',
-      title: 'Considera automatizar tu ahorro',
-      body: `Con tu margen actual, podrías transferir automaticamente ${fmtEuro(goalEuros || savings * 0.5)} al principio de cada mes a una cuenta de ahorro. Lo que no ves, no lo gastas.`,
-    });
-  }
-
-  // ---- Mensajes si no hay datos ----
+  // ---- Mensajes base ----
   if (totalExpense === 0 && totalIncome === 0) {
     advice.push({
       type: 'sugerencia', icon: '🚀',
       title: 'Empieza a registrar hoy',
-      body: 'Añade tus ingresos y gastos de este mes para recibir consejos 100% personalizados basados en tus datos reales.',
+      body: 'Añade tus ingresos, gastos, ahorro e inversiones para recibir consejos personalizados basados en tus datos reales.',
     });
   }
 
@@ -682,7 +786,7 @@ function generateAdvice() {
     advice.push({
       type: 'sugerencia', icon: '🎯',
       title: 'Define tu objetivo de ahorro',
-      body: 'Sin una meta clara, es dificil medir el progreso. Ve a Objetivos y fija cuanto quieres ahorrar este mes. Un objetivo pequeño sigue siendo un objetivo.',
+      body: 'Sin una meta clara, es dificil medir el progreso. Ve a Objetivos y fija cuanto quieres ahorrar este mes.',
     });
   }
 
@@ -690,7 +794,7 @@ function generateAdvice() {
     advice.push({
       type: 'sugerencia', icon: '📊',
       title: 'Configura presupuestos por categoria',
-      body: 'Poner un limite mensual a cada categoria (alimentacion, ocio, transporte...) es la tecnica mas eficaz para controlar el gasto. Empieza con tus 3 categorias principales.',
+      body: 'Poner un limite mensual a cada categoria es la tecnica mas eficaz para controlar el gasto.',
     });
   }
 
@@ -730,7 +834,6 @@ function openCatModal() {
   document.getElementById('catPreviewIcon').textContent       = '📦';
   document.getElementById('catPreviewIcon').style.background  = '#7c4dff1a';
 
-  // Emoji picker
   document.getElementById('emojiPicker').innerHTML = CAT_EMOJIS.map(e => `
     <button class="emoji-btn${e === state.catEmoji ? ' selected' : ''}" data-emoji="${e}">${e}</button>`
   ).join('');
@@ -743,7 +846,6 @@ function openCatModal() {
     });
   });
 
-  // Color palette
   document.getElementById('colorPalette').innerHTML =
     CAT_COLORS.map(c => `
       <button class="color-swatch${c === state.catColor ? ' selected' : ''}"
@@ -819,7 +921,6 @@ function openAddModal() {
   document.getElementById('descInput').value   = '';
   document.getElementById('dateInput').value   = new Date().toISOString().split('T')[0];
 
-  // Type toggle reset
   document.querySelectorAll('.type-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.type === 'expense');
   });
@@ -831,6 +932,35 @@ function openAddModal() {
 
 function buildCatGrid() {
   const grid = document.getElementById('catGrid');
+
+  // Ahorro: auto-asigna categoría, muestra mensaje informativo
+  if (state.txType === 'savings') {
+    state.selectedCat = '__savings';
+    grid.innerHTML = `<div class="savings-type-hint">🏦 Este importe quedará bloqueado como ahorro del mes y contabilizará en tu objetivo de ahorro</div>`;
+    return;
+  }
+
+  // Inversión: muestra categorías de inversión
+  if (state.txType === 'investment') {
+    state.selectedCat = null;
+    grid.innerHTML = Object.entries(INVESTMENT_CATEGORIES).map(([k, cat]) => `
+      <button class="cat-btn${state.selectedCat === k ? ' selected' : ''}" data-cat="${k}">
+        <span class="cat-emoji">${cat.emoji}</span>
+        <span class="cat-label">${cat.label}</span>
+      </button>`
+    ).join('');
+    grid.querySelectorAll('.cat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.selectedCat = btn.dataset.cat;
+        grid.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      });
+    });
+    return;
+  }
+
+  // Gasto / Ingreso: categorías normales + personalizadas
+  state.selectedCat = null;
   grid.innerHTML = Object.entries(getAllCategories()).map(([k, cat]) => `
     <button class="cat-btn${state.selectedCat === k ? ' selected' : ''}" data-cat="${k}">
       <span class="cat-emoji">${cat.emoji}</span>
@@ -888,6 +1018,61 @@ function saveTransaction() {
 }
 
 // =====================================================================
+// EXPORT TO EXCEL
+// =====================================================================
+function exportToExcel() {
+  const txs = DB.getTransactions().sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  if (txs.length === 0) {
+    showToast('Sin transacciones para exportar');
+    return;
+  }
+
+  const typeLabel = {
+    expense:    'Gasto',
+    income:     'Ingreso',
+    savings:    'Ahorro',
+    investment: 'Inversión',
+  };
+
+  const rows = txs.map(tx => {
+    const cat = getCategoryForTransaction(tx);
+    const sign = tx.type === 'income' ? 1 : -1;
+    return {
+      'Fecha':        tx.date,
+      'Tipo':         typeLabel[tx.type] || tx.type,
+      'Categoría':    cat.label,
+      'Descripción':  tx.description || '',
+      'Importe (€)':  sign * tx.amount,
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 30 },
+    { wch: 14 },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Transacciones');
+
+  const today  = new Date().toISOString().split('T')[0];
+  const wbout  = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob   = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url    = URL.createObjectURL(blob);
+  const a      = document.createElement('a');
+  a.href       = url;
+  a.download   = `fintrack_${today}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
+  showToast('Excel descargado');
+}
+
+// =====================================================================
 // NAVIGATION
 // =====================================================================
 function switchView(viewId) {
@@ -933,7 +1118,6 @@ function showToast(msg) {
 // INIT
 // =====================================================================
 function init() {
-  // Month navigation
   document.getElementById('prevMonthBtn').addEventListener('click', () => {
     state.currentMonth = prevMonth(state.currentMonth);
     document.getElementById('monthDisplay').textContent = fmtMonth(state.currentMonth);
@@ -946,15 +1130,12 @@ function init() {
     refreshView();
   });
 
-  // Bottom nav
   document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
 
-  // FAB
   document.getElementById('addFab').addEventListener('click', openAddModal);
 
-  // Modal close
   document.getElementById('closeModal').addEventListener('click', () => {
     document.getElementById('addModal').classList.add('hidden');
   });
@@ -963,24 +1144,24 @@ function init() {
     if (e.target === e.currentTarget) document.getElementById('addModal').classList.add('hidden');
   });
 
-  // Type toggle
+  // Tipo de transacción — reconstruye grid al cambiar
   document.querySelectorAll('.type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       state.txType = btn.dataset.type;
+      state.selectedCat = null;
       document.querySelectorAll('.type-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.type === btn.dataset.type);
       });
+      buildCatGrid();
     });
   });
 
-  // Save transaction
   document.getElementById('saveBtn').addEventListener('click', saveTransaction);
 
   document.getElementById('amountInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') saveTransaction();
   });
 
-  // Delete modal
   document.getElementById('cancelDelete').addEventListener('click', () => {
     document.getElementById('deleteModal').classList.add('hidden');
     state.deleteId = null;
@@ -996,7 +1177,6 @@ function init() {
     }
   });
 
-  // Disponible — saldo base
   document.getElementById('balanceEditBtn').addEventListener('click', () => {
     const s = DB.getSettings();
     document.getElementById('baseBalanceInput').value = s.baseBalance || '';
@@ -1014,7 +1194,6 @@ function init() {
     renderDashboard();
   });
 
-  // Settings: savings goal
   document.getElementById('saveGoal').addEventListener('click', () => {
     const s = DB.getSettings();
     s.goalValue = parseFloat(document.getElementById('savingsGoalInput').value) || 0;
@@ -1024,7 +1203,6 @@ function init() {
     if (state.activeView === 'dashboard') renderDashboard();
   });
 
-  // Goal type tabs
   document.querySelectorAll('.goal-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.goal-tab').forEach(b => b.classList.remove('active'));
@@ -1036,7 +1214,6 @@ function init() {
     });
   });
 
-  // Settings: budgets
   document.getElementById('saveBudgets').addEventListener('click', () => {
     const s = DB.getSettings();
     s.budgets = {};
@@ -1049,7 +1226,6 @@ function init() {
     showToast('Presupuestos guardados');
   });
 
-  // Custom categories modal
   document.getElementById('newCatBtn').addEventListener('click', openCatModal);
   document.getElementById('closeCatModal').addEventListener('click', () => {
     document.getElementById('catModal').classList.add('hidden');
@@ -1059,7 +1235,8 @@ function init() {
   });
   document.getElementById('saveCatBtn').addEventListener('click', saveCat);
 
-  // Initial render
+  document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+
   document.getElementById('monthDisplay').textContent = fmtMonth(state.currentMonth);
   renderDashboard();
 }

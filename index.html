@@ -13,6 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="app">
@@ -50,7 +51,7 @@
         <div class="stat-card glass balance-card">
           <div class="stat-icon balance-icon">&#128178;</div>
           <div class="stat-info">
-            <span class="stat-label">Disponible (total acumulado)</span>
+            <span class="stat-label">Disponible libre</span>
             <span class="stat-value" id="dash-balance">0 &#8364;</span>
           </div>
           <button class="balance-edit-btn" id="balanceEditBtn" title="Editar saldo base">&#9998;</button>
@@ -70,7 +71,10 @@
         <div class="savings-card glass">
           <div class="savings-header">
             <span class="savings-label">Ahorro mensual</span>
-            <span class="savings-value" id="dash-savings">0 &#8364;</span>
+            <div class="savings-amount-wrap">
+              <span class="savings-value" id="dash-savings">0 &#8364;</span>
+              <span class="savings-badge hidden" id="dash-savings-badge">&#128274; bloqueado</span>
+            </div>
           </div>
           <div class="savings-bar">
             <div class="savings-fill" id="dash-savings-fill"></div>
@@ -79,6 +83,7 @@
             <span id="dash-savings-pct">Sin objetivo definido</span>
             <span id="dash-savings-goal"></span>
           </div>
+          <div class="savings-extra hidden" id="dash-savings-extra"></div>
         </div>
 
         <div class="glass chart-card">
@@ -93,8 +98,20 @@
           <div id="categoryLegend" class="chart-legend"></div>
         </div>
 
+        <div class="glass chart-card" id="investmentChartCard" style="display:none">
+          <h3 class="section-title">Inversiones este mes</h3>
+          <div class="donut-wrapper">
+            <canvas id="investmentChart"></canvas>
+            <div class="donut-center">
+              <span id="investmentTotal">0 &#8364;</span>
+              <small>invertido</small>
+            </div>
+          </div>
+          <div id="investmentLegend" class="chart-legend"></div>
+        </div>
+
         <div class="glass trend-card">
-          <h3 class="section-title">Gastos del mes — dia a dia</h3>
+          <h3 class="section-title">Flujo del mes — dia a dia</h3>
           <div class="trend-chart-wrapper">
             <canvas id="trendChart"></canvas>
           </div>
@@ -103,6 +120,9 @@
 
       <!-- GASTOS -->
       <section id="view-gastos" class="view">
+        <div class="gastos-header">
+          <button class="export-btn" id="exportBtn">&#128196; Exportar Excel</button>
+        </div>
         <div id="emptyTransactions" class="empty-state hidden">
           <div class="empty-icon">&#128184;</div>
           <p>Sin transacciones este mes</p>
@@ -128,7 +148,7 @@
 
         <div class="glass settings-card">
           <h3>&#128202; Presupuesto por categoria</h3>
-          <p class="settings-hint">Limite maximo mensual por categoria.</p>
+          <p class="settings-hint">Limite maximo mensual por categoria de gasto.</p>
           <div id="budgetInputs" class="budget-inputs"></div>
           <button class="save-settings-btn" id="saveBudgets">Guardar presupuestos</button>
         </div>
@@ -183,9 +203,11 @@
         <h2>Nueva transaccion</h2>
         <button class="close-btn" id="closeModal">&#10005;</button>
       </div>
-      <div class="type-toggle">
+      <div class="type-toggle type-grid">
         <button class="type-btn active" data-type="expense">&#128184; Gasto</button>
         <button class="type-btn" data-type="income">&#128176; Ingreso</button>
+        <button class="type-btn" data-type="savings">&#127968; Ahorro</button>
+        <button class="type-btn" data-type="investment">&#128200; Inversión</button>
       </div>
       <div class="amount-group">
         <input type="number" id="amountInput" class="amount-input" placeholder="0" min="0" step="0.01" inputmode="decimal">
