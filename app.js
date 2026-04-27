@@ -69,7 +69,7 @@ const DB = {
     this.saveTransactions(this.getTransactions().filter(t => t.id !== id));
   },
   getSettings() {
-    const defaults = { refIncome: 0, goalType: 'amount', goalValue: 0, budgets: {}, baseBalance: 0, savingsMode: 'month' };
+    const defaults = { refIncome: 0, goalType: 'amount', goalValue: 0, budgets: {}, baseBalance: 0 };
     return Object.assign(defaults, JSON.parse(localStorage.getItem('ft_settings') || '{}'));
   },
   saveSettings(s) {
@@ -268,12 +268,8 @@ function renderDashboard() {
     - sum(allTxsPrev.filter(t => t.type === 'expense'))
     - sum(allTxsPrev.filter(t => t.type === 'savings'))
     - sum(allTxsPrev.filter(t => t.type === 'investment'));
-  const refIncome = settings.savingsMode === 'cumulative' ? prevDisp + totalIncome : totalIncome;
+  const refIncome = prevDisp + totalIncome;
   const goalEuros = calcGoalEuros(settings, refIncome);
-
-  document.querySelectorAll('.smode-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.smode === (settings.savingsMode || 'month'));
-  });
 
   const fillEl = document.getElementById('dash-savings-fill');
   const pctEl  = document.getElementById('dash-savings-pct');
@@ -1105,16 +1101,6 @@ function init() {
   document.getElementById('saveCatBtn').addEventListener('click', saveCat);
 
   document.getElementById('exportBtn').addEventListener('click', exportToExcel);
-
-  // Savings mode toggle
-  document.querySelectorAll('.smode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const s = DB.getSettings();
-      s.savingsMode = btn.dataset.smode;
-      DB.saveSettings(s);
-      renderDashboard();
-    });
-  });
 
   document.getElementById('monthDisplay').textContent = fmtMonth(state.currentMonth);
   renderDashboard();
