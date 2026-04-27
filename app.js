@@ -231,7 +231,7 @@ function renderDashboard() {
   document.getElementById('dash-income').textContent  = fmtEuro(totalIncome);
   document.getElementById('dash-expense').textContent = fmtEuro(totalExpense);
 
-  const allTxs = DB.getTransactions();
+  const allTxs = DB.getTransactions().filter(t => t.date.substring(0, 7) <= state.currentMonth);
   const disponible = (settings.baseBalance || 0)
     + sum(allTxs.filter(t => t.type === 'income'))
     - sum(allTxs.filter(t => t.type === 'expense'))
