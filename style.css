@@ -301,6 +301,32 @@ body {
   letter-spacing: 0.2px;
 }
 
+.savings-mode-toggle {
+  display: flex;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.smode-btn {
+  flex: 1;
+  padding: 0.28rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--muted);
+  font-family: Outfit, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.smode-btn.active {
+  background: rgba(124, 77, 255, 0.22);
+  border-color: var(--purple);
+  color: var(--purple);
+}
+
 .savings-bar {
   height: 7px;
   background: rgba(255, 255, 255, 0.07);
