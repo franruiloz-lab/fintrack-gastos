@@ -242,18 +242,17 @@ function renderDashboard() {
   balEl.textContent = fmtEuro(disponible);
   balEl.style.color = disponible >= 0 ? 'var(--green)' : 'var(--red)';
 
+  const savings = totalIncome - totalExpense;
   const savEl = document.getElementById('dash-savings');
-  savEl.textContent = fmtEuro(totalSavingsT);
-  savEl.style.color = totalSavingsT > 0 ? 'var(--yellow)' : 'var(--muted)';
+  savEl.textContent = fmtEuro(savings);
+  savEl.style.color = savings >= 0 ? 'var(--green)' : 'var(--red)';
 
   const badge = document.getElementById('dash-savings-badge');
-  if (totalSavingsT > 0) badge.classList.remove('hidden');
-  else badge.classList.add('hidden');
+  badge.classList.add('hidden');
 
-  const margenLibre = totalIncome - totalExpense - totalSavingsT - totalInvestment;
   const extraEl = document.getElementById('dash-savings-extra');
   const parts = [];
-  if (margenLibre > 0) parts.push(`Margen libre: ${fmtEuro(margenLibre)}`);
+  if (totalSavingsT > 0) parts.push(`Ahorro: ${fmtEuro(totalSavingsT)}`);
   if (totalInvestment > 0) parts.push(`Invertido: ${fmtEuro(totalInvestment)}`);
   if (parts.length > 0) {
     extraEl.textContent = parts.join('  ·  ');
@@ -262,25 +261,18 @@ function renderDashboard() {
     extraEl.classList.add('hidden');
   }
 
-  const allTxsPrev = DB.getTransactions().filter(t => !t.date.startsWith(state.currentMonth));
-  const prevDisp = (settings.baseBalance || 0)
-    + sum(allTxsPrev.filter(t => t.type === 'income'))
-    - sum(allTxsPrev.filter(t => t.type === 'expense'))
-    - sum(allTxsPrev.filter(t => t.type === 'savings'))
-    - sum(allTxsPrev.filter(t => t.type === 'investment'));
-  const refIncome = prevDisp + totalIncome;
-  const goalEuros = calcGoalEuros(settings, refIncome);
+  const goalEuros = calcGoalEuros(settings, totalIncome);
 
   const fillEl = document.getElementById('dash-savings-fill');
   const pctEl  = document.getElementById('dash-savings-pct');
   const goalEl = document.getElementById('dash-savings-goal');
 
   if (goalEuros > 0) {
-    const pct = Math.min(100, Math.max(0, (totalSavingsT / goalEuros) * 100));
+    const pct = Math.min(100, Math.max(0, (savings / goalEuros) * 100));
     fillEl.style.width      = pct + '%';
-    fillEl.style.background = totalSavingsT >= goalEuros
+    fillEl.style.background = savings >= goalEuros
       ? 'linear-gradient(90deg, var(--green), #69f0ae)'
-      : 'linear-gradient(90deg, #ffd740, #ffab00)';
+      : 'linear-gradient(90deg, var(--purple), var(--cyan))';
     pctEl.textContent  = `${Math.round(pct)}% del objetivo`;
     goalEl.textContent = `Meta: ${fmtEuro(goalEuros)}`;
   } else {
