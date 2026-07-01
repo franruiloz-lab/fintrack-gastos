@@ -1102,6 +1102,29 @@ body {
   overflow: hidden;
 }
 
+/* ===== MÍNIMOS ===== */
+.minimos-card {
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.minimo-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.minimo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.minimo-label { font-size: 0.82rem; color: var(--muted); font-weight: 500; }
+.minimo-val   { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+
 /* ===== UTILS ===== */
 .hidden { display: none !important; }
 
