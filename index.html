@@ -49,41 +49,33 @@
         </div>
 
         <div class="stat-card glass balance-card">
-          <div class="stat-icon balance-icon">&#128178;</div>
+          <div class="stat-icon balance-icon">&#8771;</div>
           <div class="stat-info">
-            <span class="stat-label">Disponible libre</span>
-            <span class="stat-value" id="dash-balance">0 &#8364;</span>
-          </div>
-          <button class="balance-edit-btn" id="balanceEditBtn" title="Editar saldo base">&#9998;</button>
-        </div>
-        <div class="glass balance-edit-card hidden" id="balanceEditCard">
-          <p class="settings-hint">Saldo inicial antes de usar la app (dinero que ya tenías)</p>
-          <div class="input-group">
-            <input type="number" id="baseBalanceInput" class="settings-input" placeholder="0" step="0.01" inputmode="decimal">
-            <span class="input-suffix">&#8364;</span>
-          </div>
-          <div class="balance-edit-btns">
-            <button class="cancel-btn" id="cancelBalance">Cancelar</button>
-            <button class="save-settings-btn" id="saveBalance">Guardar</button>
+            <span class="stat-label">Resultado</span>
+            <span class="stat-value" id="dash-balance" style="color:var(--cyan)">0 &#8364;</span>
           </div>
         </div>
 
-        <div class="savings-card glass">
-          <div class="savings-header">
-            <span class="savings-label">Ahorro mensual</span>
-            <div class="savings-amount-wrap">
-              <span class="savings-value" id="dash-savings">0 &#8364;</span>
-              <span class="savings-badge hidden" id="dash-savings-badge">&#128274; bloqueado</span>
+        <div class="minimos-card glass">
+          <h3 class="section-title">M&#237;nimos mensuales</h3>
+          <div class="minimo-row">
+            <div class="minimo-header">
+              <span class="minimo-label">&#127968; Ahorro</span>
+              <span class="minimo-val" id="minimo-ahorro-val">0 &#8364; / 300 &#8364;</span>
+            </div>
+            <div class="savings-bar">
+              <div class="savings-fill" id="minimo-ahorro-fill"></div>
             </div>
           </div>
-          <div class="savings-bar">
-            <div class="savings-fill" id="dash-savings-fill"></div>
+          <div class="minimo-row">
+            <div class="minimo-header">
+              <span class="minimo-label">&#128200; Inversi&#243;n</span>
+              <span class="minimo-val" id="minimo-inv-val">0 &#8364; / 150 &#8364;</span>
+            </div>
+            <div class="savings-bar">
+              <div class="savings-fill" id="minimo-inv-fill"></div>
+            </div>
           </div>
-          <div class="savings-footer">
-            <span id="dash-savings-pct">Sin objetivo definido</span>
-            <span id="dash-savings-goal"></span>
-          </div>
-          <div class="savings-extra hidden" id="dash-savings-extra"></div>
         </div>
 
         <div class="glass chart-card">
