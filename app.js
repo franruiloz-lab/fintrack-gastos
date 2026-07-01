@@ -222,64 +222,41 @@ function investmentByCategory(ym) {
 // RENDER: DASHBOARD
 // =====================================================================
 function renderDashboard() {
-  const settings        = DB.getSettings();
+  const MINIMO_AHORRO = 300;
+  const MINIMO_INV    = 150;
+
   const totalExpense    = sum(getExpenses());
   const totalIncome     = sum(getIncomes());
   const totalSavingsT   = sum(getSavingsType());
   const totalInvestment = sum(getInvestments());
 
-  document.getElementById('dash-income').textContent  = fmtEuro(totalIncome);
-  document.getElementById('dash-expense').textContent = fmtEuro(totalExpense);
+  document.getElementById('dash-income').textContent = fmtEuro(totalIncome);
 
-  const allTxs = DB.getTransactions().filter(t => t.date.substring(0, 7) <= state.currentMonth);
-  const disponible = (settings.baseBalance || 0)
-    + sum(allTxs.filter(t => t.type === 'income'))
-    - sum(allTxs.filter(t => t.type === 'expense'))
-    - sum(allTxs.filter(t => t.type === 'savings'))
-    - sum(allTxs.filter(t => t.type === 'investment'));
+  const totalSalidas = totalExpense + totalSavingsT + totalInvestment;
+  document.getElementById('dash-expense').textContent = fmtEuro(totalSalidas);
 
-  const balEl = document.getElementById('dash-balance');
-  balEl.textContent = fmtEuro(disponible);
-  balEl.style.color = disponible >= 0 ? 'var(--green)' : 'var(--red)';
+  const balance = totalIncome - totalSalidas;
+  document.getElementById('dash-balance').textContent = fmtEuro(balance);
 
-  const savings = totalIncome - totalExpense;
-  const savEl = document.getElementById('dash-savings');
-  savEl.textContent = fmtEuro(savings);
-  savEl.style.color = savings >= 0 ? 'var(--green)' : 'var(--red)';
+  // Barra ahorro
+  const ahorroFill = document.getElementById('minimo-ahorro-fill');
+  const ahorroVal  = document.getElementById('minimo-ahorro-val');
+  const ahorroPct  = Math.min(100, (totalSavingsT / MINIMO_AHORRO) * 100);
+  ahorroFill.style.width      = ahorroPct + '%';
+  ahorroFill.style.background = totalSavingsT >= MINIMO_AHORRO
+    ? 'linear-gradient(90deg, var(--green), #69f0ae)'
+    : 'linear-gradient(90deg, var(--purple), var(--cyan))';
+  ahorroVal.textContent = `${fmtEuro(totalSavingsT)} / ${fmtEuro(MINIMO_AHORRO)}`;
 
-  const badge = document.getElementById('dash-savings-badge');
-  badge.classList.add('hidden');
-
-  const extraEl = document.getElementById('dash-savings-extra');
-  const parts = [];
-  if (totalSavingsT > 0) parts.push(`Ahorro: ${fmtEuro(totalSavingsT)}`);
-  if (totalInvestment > 0) parts.push(`Invertido: ${fmtEuro(totalInvestment)}`);
-  if (parts.length > 0) {
-    extraEl.textContent = parts.join('  ·  ');
-    extraEl.classList.remove('hidden');
-  } else {
-    extraEl.classList.add('hidden');
-  }
-
-  const goalEuros = calcGoalEuros(settings, totalIncome);
-
-  const fillEl = document.getElementById('dash-savings-fill');
-  const pctEl  = document.getElementById('dash-savings-pct');
-  const goalEl = document.getElementById('dash-savings-goal');
-
-  if (goalEuros > 0) {
-    const pct = Math.min(100, Math.max(0, (savings / goalEuros) * 100));
-    fillEl.style.width      = pct + '%';
-    fillEl.style.background = savings >= goalEuros
-      ? 'linear-gradient(90deg, var(--green), #69f0ae)'
-      : 'linear-gradient(90deg, var(--purple), var(--cyan))';
-    pctEl.textContent  = `${Math.round(pct)}% del objetivo`;
-    goalEl.textContent = `Meta: ${fmtEuro(goalEuros)}`;
-  } else {
-    fillEl.style.width = '0%';
-    pctEl.textContent  = 'Sin objetivo definido';
-    goalEl.textContent = '';
-  }
+  // Barra inversión
+  const invFill = document.getElementById('minimo-inv-fill');
+  const invVal  = document.getElementById('minimo-inv-val');
+  const invPct  = Math.min(100, (totalInvestment / MINIMO_INV) * 100);
+  invFill.style.width      = invPct + '%';
+  invFill.style.background = totalInvestment >= MINIMO_INV
+    ? 'linear-gradient(90deg, var(--green), #69f0ae)'
+    : 'linear-gradient(90deg, var(--cyan), #0097a7)';
+  invVal.textContent = `${fmtEuro(totalInvestment)} / ${fmtEuro(MINIMO_INV)}`;
 
   renderCategoryChart();
   renderInvestmentChart();
@@ -1024,23 +1001,6 @@ function init() {
       showToast('Transaccion eliminada');
       refreshView();
     }
-  });
-
-  document.getElementById('balanceEditBtn').addEventListener('click', () => {
-    const s = DB.getSettings();
-    document.getElementById('baseBalanceInput').value = s.baseBalance || '';
-    document.getElementById('balanceEditCard').classList.remove('hidden');
-  });
-  document.getElementById('cancelBalance').addEventListener('click', () => {
-    document.getElementById('balanceEditCard').classList.add('hidden');
-  });
-  document.getElementById('saveBalance').addEventListener('click', () => {
-    const s = DB.getSettings();
-    s.baseBalance = parseFloat(document.getElementById('baseBalanceInput').value) || 0;
-    DB.saveSettings(s);
-    document.getElementById('balanceEditCard').classList.add('hidden');
-    showToast('Saldo base guardado');
-    renderDashboard();
   });
 
   document.getElementById('saveGoal').addEventListener('click', () => {
