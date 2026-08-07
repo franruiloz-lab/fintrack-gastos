@@ -865,8 +865,12 @@ function saveTransaction() {
 }
 
 // =====================================================================
-// EXPORT TO EXCEL
+// EXPORT TO CSV
 // =====================================================================
+function csvField(value) {
+  return `"${String(value).replace(/"/g, '""')}"`;
+}
+
 function exportToExcel() {
   const txs = DB.getTransactions().sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -876,34 +880,29 @@ function exportToExcel() {
   }
 
   const typeLabel = { expense: 'Gasto', income: 'Ingreso', savings: 'Ahorro', investment: 'Inversión' };
+  const header = ['Fecha', 'Tipo', 'Categoría', 'Descripción', 'Importe (€)'];
 
-  const rows = txs.map(tx => {
+  const lines = [header, ...txs.map(tx => {
     const cat  = getCategoryForTransaction(tx);
     const sign = tx.type === 'income' ? 1 : -1;
-    return {
-      'Fecha':        tx.date,
-      'Tipo':         typeLabel[tx.type] || tx.type,
-      'Categoría':    cat.label,
-      'Descripción':  tx.description || '',
-      'Importe (€)':  sign * tx.amount,
-    };
-  });
+    return [
+      tx.date,
+      typeLabel[tx.type] || tx.type,
+      cat.label,
+      tx.description || '',
+      (sign * tx.amount).toFixed(2).replace('.', ','),
+    ];
+  })].map(row => row.map(csvField).join(';'));
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 30 }, { wch: 14 }];
-
-  const wb   = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Transacciones');
-
+  // BOM al inicio para que Excel/Sheets detecten UTF-8 y no rompan acentos/€
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
   const today = new Date().toISOString().split('T')[0];
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob  = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url   = URL.createObjectURL(blob);
-  const a     = document.createElement('a');
-  a.href = url; a.download = `fintrack_${today}.xlsx`;
+  a.href = url; a.download = `fintrack_${today}.csv`;
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
-  showToast('Excel descargado');
+  showToast('CSV descargado');
 }
 
 // =====================================================================
